@@ -84,6 +84,9 @@ Also:
 
 ## Steps
 
+0. **Scope.** If `plan.json` has `mode: manual` with kinds of finding, a real finding of
+   another kind is routed `park` with the revisit trigger "next pass that covers it". It is
+   never dropped for being out of scope.
 1. **Calibrate.** Read outcomes since the last round. For each closed or rejected
    PR, note the reason class (false bug, product decision, not worth it, intentional).
    Apply those lessons to this round. Most past closures were Brad ruling on a choice

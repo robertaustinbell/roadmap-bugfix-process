@@ -132,6 +132,24 @@ class CoachFeedbackContract(unittest.TestCase):
         self.assertEqual(sorted(re.findall(r'`([a-z-]+)`', line)), sorted(self.TEMPLATES))
 
 
+class OwnerStartsTheLoop(unittest.TestCase):
+    def test_coordinator_checks_the_session_and_is_watched_from_the_start(self):
+        md = text('agents/coordinator.md')
+        steps = md[md.index('## Steps'):]
+        for needle in ('watch.py begin coordinator', 'session.py may-open-round',
+                       'session.py round-opened', 'session.py start --mode',
+                       'session.py request', 'session.py pass-done'):
+            with self.subTest(needle):
+                self.assertIn(needle, steps)
+        self.assertLess(steps.index('watch.py begin coordinator'), steps.index('0. **Resume first.**'))
+
+    def test_scheduled_coordinator_is_gated_and_watched(self):
+        cron = text('schedules/crontab-example.txt')
+        line = next(l for l in cron.splitlines() if 'agents/coordinator.md' in l)
+        self.assertIn('session.py" gate &&', line)
+        self.assertIn('watch.py" run coordinator --', line)
+
+
 class SchemasParse(unittest.TestCase):
     def test_every_schema_is_strict_json(self):
         def no_dupes(pairs):

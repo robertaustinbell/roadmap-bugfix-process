@@ -5,6 +5,21 @@ Each entry names the decision it feeds and its removal condition, per
 [adding a rule, a field or a gate](scorecard-and-test-set.md#adding-a-rule-a-field-or-a-gate).
 Rules live in their own pages; this page records why they are there.
 
+## 2026-11-04: the owner starts the loop and agrees what it works on
+
+Austin's rules: the Coordinator talks with the user (Austin; Brad through Austin) about what
+to scan; an automated mode that runs on its own after that talk "but does not start without
+the user or the users agent starting the process"; a manual mode that does one pass agreed
+with the user, such as only the iPhone app code or only security issues; and "when the user
+asks the coordinator delegates". Separately: "the coach should observe everything".
+
+| Change | Why | Feeds | Undo when |
+|---|---|---|---|
+| [`scripts/coordinator/session.py`](../scripts/coordinator/session.py): a session (mode, scope, the owner's words) is required to open a round; only owners start, stop or request; a manual pass ends when it closes; a stopped session still follows up on open PRs | Nothing stopped a schedule or a stray message from starting rounds, and the owner had no way to aim the loop | Which rounds run and what they cover | Never removed; a loop that starts itself is the failure this prevents |
+| The Coordinator's start talk, requests and plan notices, logged in `owner-talk.jsonl` | The most important code is what the owner says it is; the scores are a fallback | The round plan | Owner requests are never taken in 5 rounds: drop the per-round plan notice, keep the start talk |
+| The Coordinator is registered with the Coach watch before its first step; owner talk counts as activity | The Coach missed the start gate, the planning and the owner talk | What the Coach can see | Never removed |
+| Out-of-scope findings in a manual pass are parked, not dropped | A narrow pass must not lose real bugs it happens to see | The parked list | Never removed |
+
 ## 2026-11-03: the Coach runs itself, and its feedback is delivered and scored
 
 Austin's rule: the Coach "runs when ever anything else is running and for a bit after", and it

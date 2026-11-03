@@ -16,6 +16,10 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
 
 ## The loop in one minute
 
+0. **The owner starts it.** Nothing runs until the owner (Austin; Brad through Austin) starts the
+   Coordinator and agrees what to work on: **automated** (it runs rounds on its own until told to
+   stop) or **manual** (one pass on an agreed scope, such as only the iPhone app code or only security
+   issues). The owner can ask for work at any time; the Coordinator delegates it.
 1. **Coordinator** starts a round, but only once every PR from the last round has been
    *addressed* (merged, closed, or a maintainer comment asking for a change; CI and bots don't count).
 2. **Four finders** run: Trail of Bits skills, fuck-my-shit-mountain, tech-debt-audit, and Open
@@ -68,7 +72,7 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
 | [docs/trial-static-site.md](docs/trial-static-site.md) | One full trial run on a different repo, and what it changed |
 | [agents/](agents/) | Copy-paste prompt templates for every agent |
 | [templates/](templates/) | PR body and JSON schemas for findings, gate results, reviews |
-| [scripts/](scripts/) | Portable scripts: OCR pipeline, publish driver, Coach watch and feedback items, outcome data, kit checker |
+| [scripts/](scripts/) | Portable scripts: OCR pipeline, publish driver, loop session (modes, owner requests), Coach watch and feedback items, outcome data, kit checker |
 | [tests/](tests/) | Tests for the publish driver and for the kit's own consistency |
 | [schedules/](schedules/) | Cron, launchd, and Hermes Agent job examples |
 | [data/](data/) | Real public PR outcomes, scorecard baseline, test-set seed |
@@ -86,6 +90,7 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
    says what tool it needs. Open Code Review needs the `ocr` CLI and a model provider; see
    [scripts/ocr/README.md](scripts/ocr/README.md).
 5. Run one round by hand, following the agent templates in order, before scheduling anything.
+   Start it as a manual pass with a small scope (`scripts/coordinator/session.py start --mode manual ...`).
    Scripts here are sanitized from a working setup: review them before running.
 6. Schedule it ([docs/scheduling.md](docs/scheduling.md)) only after a hand-run round produced
    PRs Brad was happy with.

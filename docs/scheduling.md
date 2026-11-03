@@ -1,11 +1,17 @@
 # Scheduling
 
-The Open Code Review pipeline runs as two scheduled jobs. Everything else in the loop is started by the Coordinator (see [process.md](process.md) and [roles.md](roles.md)).
+The loop never starts on a timetable. The owner starts it by starting the Coordinator and agreeing a mode and scope ([process.md section 3.0](process.md#30-starting-the-loop-modes-and-owner-requests)). After that, scheduled jobs keep it going. The Open Code Review pipeline runs as two scheduled jobs; everything else in the loop is started by the Coordinator (see [roles.md](roles.md)).
 
 | Job | Every | AI? | Does |
 |---|---|---|---|
 | OCR pipeline mechanics | 15 min | no | scans while a round is open, keeps the publish driver running, sends stall notices ([`scripts/ocr/mech.py`](../scripts/ocr/mech.py)) |
 | OCR pipeline agent | 30 min, only when there is work | yes | triage, fixes, independent reviews, issues, private reports ([agents/ocr-pipeline-agent.md](../agents/ocr-pipeline-agent.md)) |
+| Coordinator tick | 30 min, only when `session.py gate` passes | yes | continues an automated session, or follows up on open PRs after a stop ([agents/coordinator.md](../agents/coordinator.md)) |
+| Coach watch | 5 min | no | starts the Coach while anything is active ([`scripts/coach/watch.py`](../scripts/coach/watch.py)) |
+
+`session.py gate` passes only when the owner has started a session that is still active, or
+when PRs from a session still need following up, and no Coordinator is already running. It
+never passes before the owner's first `start`, so no schedule can begin the loop.
 
 Neither job opens a round. Scanning starts only when the Coordinator runs `st.py round open`, after the restart rule is met (every previous-round PR addressed by the maintainer; see [publishing.md](publishing.md#the-restart-rule)). When the usage limit hits, the mechanics job closes the round's scanning. There is no timed retry.
 
@@ -46,11 +52,18 @@ See [schedules/crontab-example.txt](../schedules/crontab-example.txt) and [sched
 - For the agent job, use `monitor.py --gate`: it exits 0 only when the line is not `idle` and differs from the last time the gate passed. Chain your agent CLI after it with `&&` and pass the monitor line plus [agents/ocr-pipeline-agent.md](../agents/ocr-pipeline-agent.md) as the prompt.
 - Give the agent CLI the same tools the instructions assume: shell, git, gh (read-only for triage workers), file editing, and a way to start up to 4 sub-agents. If your CLI cannot start sub-agents, run the groups one after another in the same session and expect longer ticks.
 
+## Coordinator tick on Hermes Agent cron
+
+The plain-cron example chains the Coordinator after `session.py gate`, so a tick with nothing
+to do costs nothing. Hermes cron has no exit-code gate for agent jobs; until one is set up and
+tested, run the Coordinator tick from plain cron or launchd, or start the Coordinator by hand.
+
 ## Pausing
 
 | Want | Do |
 |---|---|
-| stop everything | pause both jobs, or `st.py top paused true` (also stops the driver keepalive) |
+| stop the loop (no new rounds; open PRs still followed up) | tell the Coordinator "stop", or `session.py stop --by <owner>` |
+| stop everything | pause all jobs, or `st.py top paused true` (also stops the driver keepalive) |
 | scans continue, no triage | `st.py top agent_hold true` |
 | finish the current part, then stop | `st.py stage <next part> held` |
 | stop publishing | `touch <ROUND_DIR>/stop-driver` (the mechanics job will not relaunch a driver while it exists) |

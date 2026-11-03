@@ -23,6 +23,11 @@ WATCH_FILES=scorecard.csv:outcomes.jsonl:<fixes-dir>/published.jsonl
 # Mechanics tick, every 15 minutes (no AI).
 */15 * * * * python3 -I "$REPO/scripts/ocr/mech.py" >> "<log-dir>/ocr-mech.cron.log" 2>&1
 
+# Coordinator tick: only after the owner started a session (session.py gate), and always watched.
+# It never starts the loop: with no session the gate fails and nothing runs.
+OWNERS=austin
+*/30 * * * * python3 -I "$REPO/scripts/coordinator/session.py" gate && python3 -I "$REPO/scripts/coach/watch.py" run coordinator -- <agent-cli> "Scheduler tick, no owner present. Read and follow $REPO/agents/coordinator.md exactly." >> "<log-dir>/coordinator.cron.log" 2>&1
+
 # Coach watch tick for work that mech.py does not start (Coordinator rounds, repairs). Cheap; no AI.
 */5 * * * * python3 -I "$REPO/scripts/coach/watch.py" tick >> "<log-dir>/coach-watch.cron.log" 2>&1
 

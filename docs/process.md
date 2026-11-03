@@ -81,16 +81,43 @@ security-policy questions. Those go to a human (see
                          |  Austin or Brad asks)   v
                          +--------------------  Decider calibration, Scorecard
 
+   Owner (Austin; Brad through Austin) <---> Coordinator: starts the loop (automated
+   or manual), agrees the scope, asks for work at any time, says stop.
+
    Coach: runs whenever any agent runs (and a while after), changes nothing, writes
    numbered feedback items; each role reads its items next run and replies.
 ```
 
 The Coach is started by [`scripts/coach/watch.py`](../scripts/coach/watch.py), not by a
 person and not on a timetable. Every launcher registers the agents it starts; a publish or
-a maintainer action counts too. See [roles.md](roles.md#how-coach-feedback-reaches-a-role)
+a maintainer action and every exchange with the owner count too. The Coordinator itself is
+registered from its first step, so the Coach sees the owner talk and the start gate as well. See [roles.md](roles.md#how-coach-feedback-reaches-a-role)
 for how its feedback reaches each role and how replies are scored.
 
 ## 3. Round lifecycle
+
+### 3.0 Starting the loop: modes and owner requests
+
+Nothing runs until an owner starts it. Owners are the people in `OWNERS` (for now Austin;
+anything from Brad reaches the loop through Austin). The owner, or the owner's own agent
+acting on the owner's words, starts the Coordinator, and the Coordinator talks with them
+before any round:
+
+| Mode | What happens | Ends |
+|---|---|---|
+| **automated** | The Coordinator asks what matters, proposes a plan (top areas and why), agrees it, then runs rounds on its own. Each round it sends the owner a short plan notice and does not wait. | When the owner says stop |
+| **manual** | The owner and the Coordinator agree one pass with a scope: some areas (for example only the iPhone app code), some finders, or some kinds of finding (for example only security issues). | When that pass closes |
+
+Whenever the owner asks for something during a session, the Coordinator records it as a
+request and delegates it: the next round plan pins it, and if no round is open and the start
+gate is open, a round opens for it now.
+
+[`scripts/coordinator/session.py`](../scripts/coordinator/session.py) holds the session (mode,
+scope, the owner's words verbatim, requests) and refuses to open a round without one. A
+scheduler can keep an automated session going and follow up on open PRs after a stop, but it
+can never start one. Every rule below (the start gate, confirm before fixing, one fix per PR,
+never merge) applies in both modes. Stopping ends new rounds, not the follow-up on PRs Brad
+has open, so no fix request goes unanswered.
 
 A round is one pass from "finders start" to "every PR from this round has been
 addressed". Rounds are numbered `R<yyyymmdd>-<n>`.
@@ -112,11 +139,12 @@ reactions, label changes by automation, or time passing. A requested repair does
 have to land before the next round starts; it runs alongside the next round. The
 next round does not wait for an empty PR queue.
 
-The first round has no previous PRs, so the gate is open.
+The first round has no previous PRs, so the gate is open. The gate is checked in both
+modes: a manual pass waits for the previous round's PRs too.
 
 ### 3.2 Open the round
 
-The Coordinator:
+The Coordinator (only with an active session, [section 3.0](#30-starting-the-loop-modes-and-owner-requests)):
 
 1. Fetches `upstream/main` and records the full commit SHA as the round's **pin**.
 2. Creates `$STATE_DIR/rounds/<round>/ROUND.json` (schema in
@@ -124,7 +152,9 @@ The Coordinator:
 3. Builds the **known list**: open and closed loop PRs, the human review list,
    Declined items, private reports already sent (by ID only), and maintainer issues.
    Finders and the Decider use it to avoid re-reporting.
-4. Writes the **round plan** (`plan.json`): which areas of the repo this round covers,
+4. Writes the **round plan** (`plan.json`), starting from the session: a manual pass covers
+   only its scope; in automated mode the owner's areas and requests become pins. The plan says
+   which areas of the repo this round covers,
    which finders go where, and the round's budget. The Coordinator ranks areas by
    impact, recent change and staleness (more signals only once results justify
    them), spends most of the budget on the top areas, keeps a share for the least
@@ -188,7 +218,9 @@ The [Decider](../agents/decider.md):
 3. Applies the [evidence bar](evidence-bar.md). Only a candidate that meets it is
    **Confirmed**.
 4. Finds every other site of the same bug pattern, so one PR fixes the whole class.
-5. Routes each candidate to exactly one outcome:
+5. Routes each candidate to exactly one outcome. A real finding outside a manual pass's
+   kinds of finding is routed `park` with the trigger "next pass that covers it", never
+   dropped:
 
 | Route | When | Goes to |
 |---|---|---|
@@ -427,6 +459,9 @@ $STATE_DIR/
   coach/items.jsonl        # Coach feedback items, each addressed to one role
   coach-responses.jsonl    # each role's reply to its items (the Coach only reads this)
   activity/                # scripts/coach/watch.py: who is working, last activity, Coach pid
+  session.json             # scripts/coordinator/session.py: mode, scope, owner's words, status
+  requests.jsonl           # owner requests during a session, and which round took each
+  owner-talk.jsonl         # every exchange between the owner and the Coordinator
 ```
 
 `$WORKDIR` is the clone of the roadmap repo (or its fork). Every agent works in its

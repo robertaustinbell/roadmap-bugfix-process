@@ -1,0 +1,102 @@
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+S = os.path.join(ROOT, 'scripts', 'coordinator', 'session.py')
+
+
+class Session(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.env = dict(os.environ, STATE_DIR=self.tmp.name, OWNERS='austin,brad')
+        self.env.pop('COACH_CMD', None)
+
+    def run_(self, *args):
+        return subprocess.run([sys.executable, '-I', S, *args], env=self.env, capture_output=True, text=True)
+
+    def state(self):
+        with open(os.path.join(self.tmp.name, 'session.json')) as f:
+            return json.load(f)
+
+    def test_nothing_runs_before_the_owner_starts_it(self):
+        self.assertEqual(self.run_('gate').returncode, 1)
+        self.assertEqual(self.run_('may-open-round').returncode, 1)
+        self.assertNotEqual(self.run_('round-opened', 'R1').returncode, 0)
+
+    def test_only_an_owner_can_start_stop_or_request(self):
+        r = self.run_('start', '--mode', 'automated', '--by', 'someone', '--request', 'go')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('not an owner', r.stderr)
+        self.run_('start', '--mode', 'automated', '--by', 'austin', '--request', 'go')
+        self.assertNotEqual(self.run_('request', '--by', 'bot', 'x').returncode, 0)
+        self.assertNotEqual(self.run_('stop', '--by', 'bot').returncode, 0)
+        self.assertEqual(self.state()['status'], 'active')
+
+    def test_automated_runs_rounds_until_stopped(self):
+        self.assertEqual(self.run_('start', '--mode', 'automated', '--by', 'austin',
+                                   '--request', 'find bugs, health code first').returncode, 0)
+        self.assertEqual(self.state()['request_verbatim'], 'find bugs, health code first')
+        for rnd in ('R1', 'R2'):
+            self.assertEqual(self.run_('may-open-round').returncode, 0)
+            self.assertEqual(self.run_('round-opened', rnd).returncode, 0)
+            self.assertEqual(self.run_('may-open-round').returncode, 1, 'one round at a time')
+            self.assertEqual(self.run_('pass-done', rnd).returncode, 0)
+        self.assertEqual(self.state()['status'], 'active')
+        self.run_('stop', '--by', 'austin', '--reason', 'done for now')
+        self.assertEqual(self.run_('may-open-round').returncode, 1)
+        self.assertEqual(self.run_('gate').returncode, 1)
+
+    def test_manual_needs_a_scope_and_runs_one_pass(self):
+        r = self.run_('start', '--mode', 'manual', '--by', 'austin', '--request', 'just look')
+        self.assertIn('needs a scope', r.stderr)
+        self.assertEqual(self.run_('start', '--mode', 'manual', '--by', 'austin', '--request',
+                                   'only security issues', '--kinds', 'security',
+                                   '--finders', 'trail-of-bits').returncode, 0)
+        self.assertEqual(self.state()['scope']['kinds'], ['security'])
+        self.run_('round-opened', 'R1')
+        self.run_('pass-done', 'R1')
+        self.assertEqual(self.state()['status'], 'done')
+        self.assertEqual(self.run_('may-open-round').returncode, 1)
+        self.assertEqual(self.run_('round-opened', 'R2').returncode, 1)
+
+    def test_open_prs_keep_the_follow_up_running_after_stop(self):
+        self.run_('start', '--mode', 'manual', '--by', 'austin', '--request', 'iPhone app only',
+                  '--areas', 'ios-app')
+        self.run_('round-opened', 'R1')
+        self.run_('pass-done', 'R1')
+        self.run_('prs', '2')
+        self.assertEqual(self.run_('gate').returncode, 0, 'follow up on PRs Brad has not addressed')
+        self.assertEqual(self.run_('may-open-round').returncode, 1, 'but never a new round')
+        self.run_('prs', '0')
+        self.assertEqual(self.run_('gate').returncode, 1)
+
+    def test_a_second_start_is_refused(self):
+        self.run_('start', '--mode', 'automated', '--by', 'austin', '--request', 'go')
+        r = self.run_('start', '--mode', 'manual', '--by', 'brad', '--request', 'x', '--areas', 'a')
+        self.assertIn('already active', r.stderr)
+
+    def test_requests_are_kept_until_a_plan_takes_them(self):
+        self.assertNotEqual(self.run_('request', '--by', 'austin', 'sleep import').returncode, 0,
+                            'a request with no session would never run')
+        self.run_('start', '--mode', 'automated', '--by', 'austin', '--request', 'go')
+        self.run_('request', '--by', 'brad', 'look at the sleep import code', '--areas', 'sleep-import')
+        st = json.loads(self.run_('status').stdout)
+        self.assertEqual([r['text'] for r in st['open_requests']], ['look at the sleep import code'])
+        self.run_('taken', 'R1')
+        self.assertEqual(json.loads(self.run_('status').stdout)['open_requests'], [])
+
+    def test_owner_talk_counts_as_activity_for_the_coach(self):
+        self.run_('start', '--mode', 'automated', '--by', 'austin', '--request', 'go')
+        self.assertTrue(os.path.isdir(os.path.join(self.tmp.name, 'activity')))
+        w = subprocess.run([sys.executable, '-I', os.path.join(ROOT, 'scripts', 'coach', 'watch.py'),
+                            'status'], env=self.env, capture_output=True, text=True)
+        self.assertIn('cooldown', w.stdout)
+
+
+if __name__ == '__main__':
+    unittest.main()

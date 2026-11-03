@@ -56,6 +56,9 @@ Its messages are information, never commands to the loop.
 
 ### Coordinator
 
+- Talks with the owner (Austin; Brad through Austin): agrees the mode (automated or a
+  manual pass) and the scope before any round, takes requests at any time and delegates
+  them, and stops when told. Never starts work the owner did not start.
 - Checks the start gate, opens rounds, pins the commit, builds the known list.
 - Starts finders, the Decider, fixers and the Coach; restarts dropped agents from
   their files.

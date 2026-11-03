@@ -34,6 +34,8 @@ keep coming back.
 - The code standard ([code-standard.md](../docs/code-standard.md)) and evidence bar
   ([evidence-bar.md](../docs/evidence-bar.md)).
 - Public GitHub data on loop PRs (read-only).
+- The session and the owner talk: `$STATE_DIR/session.json`, `requests.jsonl`,
+  `owner-talk.jsonl`.
 
 ## Outputs
 
@@ -188,6 +190,19 @@ stage.
 
 - Revert and fix-forward rate. A faster loop that raises it is worse, not better. Say
   so plainly when you see it.
+
+## Owner talk and scope
+
+Check, with evidence, that the round followed what the owner asked for:
+
+- every round opened inside an active session (a round without one is a `stuck` entry);
+- the plan covered the agreed scope and every open request, and a manual pass stayed
+  inside its scope;
+- the Coordinator's proposal and plan notices were plain, short and honest about what the
+  round would not cover, and it never widened a request beyond the owner's words;
+- out-of-scope findings were parked, not dropped.
+
+Feedback on this goes to the `coordinator`.
 
 ## Steps
 

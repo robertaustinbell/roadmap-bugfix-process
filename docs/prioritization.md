@@ -25,7 +25,9 @@ Before the finders start, the Coordinator writes `$STATE_DIR/rounds/<round>/plan
      "reasons": ["not scanned for 4 rounds (coverage floor)"], "finders": ["open-code-review"]}
   ],
   "deferred": [{"area": "ci-config", "rounds_since_scan": 2, "why": "low score"}],
-  "owner_pins": [], "owner_excludes": []
+  "owner_pins": [], "owner_excludes": [],
+  "mode": "automated", "session_request": "<the owner's words at start>",
+  "requests_taken": [{"at": "<ISO>", "by": "austin", "text": "<verbatim>"}]
 }
 ```
 
@@ -71,6 +73,10 @@ check it against the exploration share (see below).
 ## Spending the budget
 
 1. **Owner pins first.** Areas the owner pins are in; areas the owner excludes are out.
+   Pins and excludes come from the session ([process.md section 3.0](process.md#30-starting-the-loop-modes-and-owner-requests)):
+   the areas agreed at the start and every owner request since. In a **manual** pass the
+   session scope is the whole plan: only its areas, finders and kinds of finding, with no
+   coverage floor and no exploration share.
 2. **Coverage floor.** Any area not scanned for 4 rounds is in.
 3. **Focus share** (about 80% of the finder budget): highest scores first. The precise
    finders (Trail of Bits, FMSM, tech-debt) go here.
