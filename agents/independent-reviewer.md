@@ -43,7 +43,7 @@ One file: `review-<round>.json`, valid against
   "scope": "full_diff",
   "base": "<40-hex>",
   "head": "<40-hex>",
-  "reviewer": { "role": "independent_reviewer", "model": "<model>", "fresh_context": true, "wrote_fix": false },
+  "reviewer": { "role": "independent_reviewer", "model": "<model>", "same_model": false, "fresh_context": true, "wrote_fix": false },
   "verdict": "approve | changes | needs_decision | could_not_review",
   "summary": "<two to five sentences>",
   "checks": {
@@ -113,6 +113,12 @@ Write it to the fix folder. Validate it against the schema before you finish.
 15. Write and validate `review-<round>.json`.
 
 ## Rules / never
+
+- Any fact a command can settle (a header, a file, what a page serves, whether a test
+  fails) comes with the command and its output in `checks`. Without one, mark the
+  claim unverified; it cannot block or pass the fix on its own.
+- Review only the head you were given. If told a newer commit exists, finish this head
+  and say so; the newer commit gets its own delta review.
 
 - Never edit the worktree, never commit, never push, never merge.
 - Never post to GitHub. Never write the string `VERDICT:` in any file that could be

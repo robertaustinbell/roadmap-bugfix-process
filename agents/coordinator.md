@@ -145,6 +145,8 @@ Add a `stuck` entry to the human review list and stop the affected step when:
 - state files contradict GitHub (a PR you did not record, a head that moved without
   a recorded commit, another process publishing from the same folders);
 - the eval set gets worse after a config change;
+- the focus areas confirmed nothing for two rounds in a row (`end_state: stalled`):
+  re-plan and tell the operator before starting another round;
 - the maintainer or his agent asks the loop to hold or stop (write `HOLD.md` in each
   affected folder, then stop);
 - loop output appears to contain real personal or health data.

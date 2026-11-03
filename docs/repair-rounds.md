@@ -158,6 +158,8 @@ Stop repairing and put the PR on the [human-review list](human-review-and-escala
   breaks the CRAP ratchet on legacy code).
 - The PR head moved under you to a commit you did not make.
 - Two repair rounds did not change the same blocker's status.
+- Each review round found a new kind of problem, not a missed case of a known one.
+  That points at the fix's design, not its details.
 
 The escalation note names the PR, the open items with their IDs, what each round
 tried, and the one question a human needs to answer.

@@ -79,6 +79,10 @@
         "wrote_fix": {
           "description": "Must be false.",
           "const": false
+        },
+        "same_model": {
+          "description": "True when the reviewer runs on the same model as the fixer or Decider. A same-model review is a second look, not independent proof.",
+          "type": "boolean"
         }
       }
     },

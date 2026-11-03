@@ -120,8 +120,8 @@ The Coordinator:
    Finders and the Decider use it to avoid re-reporting.
 4. Writes the **round plan** (`plan.json`): which areas of the repo this round covers,
    which finders go where, and the round's budget. The Coordinator ranks areas by
-   impact, recent change, past yield, exposure, weak tests, outside reports and
-   staleness, spends most of the budget on the top areas, keeps a share for the least
+   impact, recent change and staleness (more signals only once results justify
+   them), spends most of the budget on the top areas, keeps a share for the least
    recently scanned ones, and never lets an area go unscanned longer than a set number of
    rounds. See [prioritization.md](prioritization.md).
 5. Starts the Coach.
@@ -197,6 +197,14 @@ combined site would have blocked the menu.
 policies), compare the live output against the deployed commit before shipping. Hosts and
 CDNs inject content the repo does not contain.
 
+**Passing tests are not the user's result.** For anything a user sees or runs (pages,
+media, UI), check the result where the user gets it: in real browser engines (Chromium
+and WebKit at least), at phone and desktop widths, against the built or deployed output.
+Report what was checked at which level: tests passed, built output checked, browser
+checked, live checked. Never report a higher level than the one actually seen. In a
+trial a video passed every test and showed Safari users a frozen first frame, because
+its encoding was one Safari cannot play.
+
 **Sequencing.** Do not run a structural clean-up (moving shared code, splitting files)
 in the same round as behaviour fixes that edit the same code. Fix first, then restructure
 on top, or the other way round; never in parallel.
@@ -239,12 +247,19 @@ A repair is new work on an open loop PR.
 - Never re-report a finding already raised.
 - **Cap:** at most 3 repair rounds per PR (the operator may set 2). After the cap,
   stop pushing and put the PR on the human review list.
+- **New kind each round:** if each review round finds a new kind of problem rather than
+  a missed case of a known one, stop patching. The fix's design needs a rethink, which
+  is a human decision.
 - A new commit voids every earlier approval of that PR, internal or external.
 
 ### 3.9 Close the round
 
 A round closes when every PR it opened is addressed, every candidate has a route,
-and the Coach has written its round feedback. The Coordinator then checks the start
+and the Coach has written its round feedback. Record the round's `end_state`
+(`done`, `nothing_found`, `stalled`, `out_of_budget`, `blocked`, `waiting_on_owner`;
+see [prioritization.md](prioritization.md#when-a-round-stops-early)). Two `stalled`
+rounds in a row mean the round plan is re-made and the operator is told before the
+next round starts. The Coordinator then checks the start
 gate for the next round.
 
 ## 4. Scorecard

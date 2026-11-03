@@ -17,10 +17,10 @@ Before the finders start, the Coordinator writes `$STATE_DIR/rounds/<round>/plan
   "round": "R20261110-1",
   "budget": {"finder_tokens": 1500000, "fix_slots": 8, "wall_clock_hours": 24},
   "areas": [
-    {"area": "health-core", "score": 8.4, "share": "focus",
-     "reasons": ["clinical impact", "14 commits since last scan", "2 confirmed bugs last round"],
+    {"area": "health-core", "score": 7, "share": "focus",
+     "reasons": ["clinical impact", "14 commits since last scan"],
      "finders": ["trail-of-bits", "fmsm", "open-code-review"]},
-    {"area": "docs", "score": 1.1, "share": "exploration",
+    {"area": "docs", "score": 1, "share": "exploration",
      "reasons": ["not scanned for 4 rounds (coverage floor)"], "finders": ["open-code-review"]}
   ],
   "deferred": [{"area": "ci-config", "rounds_since_scan": 2, "why": "low score"}],
@@ -33,33 +33,39 @@ the Coordinator cannot explain in its `reasons` list is a bad plan.
 
 ## Scoring an area
 
-An area is a part of the repo (the same part list Open Code Review uses). Score each one
-from signals that can be checked. Weights live in `$STATE_DIR/priority-weights.json` and
-change only with a logged reason.
+An area is a part of the repo (the same part list Open Code Review uses). Start with
+three signals, each scored 0 to 3, and add them:
 
-| Signal | Raises the score when |
+| Signal | Scores high when |
 |---|---|
 | Impact | Wrong behaviour could harm users: clinical meaning, data loss, privacy, payment, auth |
 | Change | Many commits or lines changed since the area was last scanned |
-| Yield | Earlier rounds confirmed bugs here; maintainers merged fixes here |
-| Exposure | Code runs for every user or on every request, not a dev-only path |
-| Weak tests | Low coverage, or tests that only check text rather than behaviour |
-| Outside reports | A user, maintainer or issue reported a bug here that the loop missed |
-| Staleness | Rounds since the last scan (grows every round, so nothing waits forever) |
+| Staleness | Many rounds since the last scan (grows every round, so nothing waits forever) |
 
-Lower the score when maintainers closed or declined fixes from the area, or when the area
-is generated, vendored or scheduled for removal.
+Skip areas that are generated, vendored or scheduled for removal.
+
+Keep it this small until real rounds say otherwise. Each extra signal or setting is one
+more thing to tune, test and explain. Add a signal (for example past bug yield, how many
+users the code runs for, weak tests, or bugs reported from outside the loop) only when at
+least two rounds of results show it would have changed which areas were scanned. Log
+the reason when you add one.
+
+**Do not score by past finds alone.** You only find bugs where you look, so "bugs found
+here before" mostly measures where the loop already looked. Merged PRs also reflect what
+the maintainer likes to review, not only where bugs are. And the top-scored area may be
+the one whose noisy findings happened to look best. If past yield is added as a signal,
+check it against the exploration share (see below).
 
 ## Spending the budget
 
 1. **Owner pins first.** Areas the owner pins are in; areas the owner excludes are out.
-2. **Coverage floor.** Any area not scanned for `$MAX_GAP` rounds (default 4) is in.
+2. **Coverage floor.** Any area not scanned for 4 rounds is in.
 3. **Focus share** (about 80% of the finder budget): highest scores first. The precise
    finders (Trail of Bits, FMSM, tech-debt) go here.
 4. **Exploration share** (about 20%): the least recently scanned areas, regardless of
    score. Open Code Review's breadth fits here. This is how the loop finds bugs in places
-   nobody expected; in the static-site trial, the most visible bug was in a file nobody
-   would have ranked highly.
+   nobody expected, and it is the fair comparison for the scoring: it is not chosen by
+   score, so it shows what the scoring is missing.
 5. **Stop at the budget.** A round ends when the budget is spent, not when the repo is
    covered. What did not fit goes to `deferred` with its staleness counter.
 
@@ -76,13 +82,28 @@ After the Decider routes findings, the Coordinator orders the fix queue:
 4. `fix_slots` caps how many fixes start in a round. Set it from how many PRs the
    maintainer actually addresses per round, so the queue matches what can be reviewed.
 
+## When a round stops early
+
+A round ends in one of these states, written to `round.json` as `end_state`:
+
+| State | Meaning |
+|---|---|
+| `done` | Budget spent or plan covered, PRs opened |
+| `nothing_found` | The planned areas produced no confirmed bug. A valid result, not a failure |
+| `stalled` | The focus areas confirmed nothing for two rounds in a row. Stop, re-plan, and tell the operator; the scoring may be wrong |
+| `out_of_budget` | Tokens or time ran out mid-plan. Record where each finder stopped |
+| `blocked` | A finder, tool or gate failed in a way a retry will not fix |
+| `waiting_on_owner` | The fixes left depend on owner answers |
+
 ## Checking that prioritization works
 
 Each round, the Coach and the scorecard compare the plan with what happened:
 
-- Confirmed bugs per million finder tokens, focus share against exploration share. If
-  exploration keeps winning, the scoring is wrong.
+- Confirmed bugs per million finder tokens, focus share against exploration share. Count
+  bugs after merging duplicates of the same underlying problem, so splitting one finding
+  into several cannot improve a score. If exploration matches or beats focus for two
+  rounds, the scoring is not working.
 - Bugs found from outside the loop, and whether their area was deferred. A miss in a
-  deferred area raises that area's weight for its signal.
-- Rounds per area: no area may exceed `$MAX_GAP`.
+  deferred area is evidence for adding or reweighting a signal.
+- Rounds per area: no area may exceed the coverage floor.
 - Days from round open to PRs opened.

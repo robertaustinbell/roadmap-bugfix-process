@@ -18,7 +18,10 @@ so this is a check on blind spots, not proof of independence in a strong sense.
 
 - A fresh agent session with no transcript from the Bug fixer, the Decider or an
   earlier review of the same PR.
-- A different model is preferred but not required.
+- A different model is preferred. When the reviewer runs on the same model as the
+  fixer or Decider, record `"same_model": true` in the verdict. A same-model review
+  catches slips but shares the fixer's blind spots, so treat it as a second look,
+  not independent proof.
 - Not allowed: the fixer, the agent that orchestrated the fix, or any agent whose
   context contains the fixer's reasoning.
 
@@ -35,6 +38,17 @@ so this is a check on blind spots, not proof of independence in a strong sense.
 
 Do not hand the reviewer the fixer's notes or reasoning. Do not tell it the fix is
 probably fine.
+
+**One review, one version.** A review covers exactly the head commit it was given. If a
+new commit lands while a review is running, do not ask the reviewer to fold it in: let
+the review finish on its head, then review the new commit separately (as a delta).
+
+**Checkable claims need their command.** When the reviewer states a fact that a command
+can settle (a header is or is not sent, a file exists, a page serves a script, a test
+fails), it must include the command and its output. A factual claim without one is
+recorded as unverified and cannot block or pass a fix on its own. In a trial a
+reviewer stated that a site served no analytics script; the live page did, because the
+host injected it.
 
 ## What the reviewer checks
 
