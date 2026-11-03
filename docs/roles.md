@@ -29,7 +29,8 @@ Runs the loop and owns the human review list.
 - Reviews the human review list and either decides, asks Brad, or drops items.
 - Approves Coach proposals that change process, prompts or review lines.
 - Gives review feedback that may start a repair.
-- Chooses the private channel for security reports (see
+- Gets a one-line notice for each private security report. Reports go to Brad's agent
+  without the operator's approval (see
   [human review](human-review-and-escalation.md#security-findings)).
 
 If the operator steps away and Brad's own agent runs the loop, Brad (or whoever he
@@ -139,7 +140,7 @@ Role names for `items.py`: `coordinator`, `decider`, `bug-fixer`, `repair`,
 | Push to an open loop PR | Bug fixer, only for an authorized repair or a maintainer-requested update (for example "merge main into this") |
 | Comment on a loop PR | Bug fixer, only to answer review feedback on that PR |
 | Open a GitHub issue | Only with Brad's explicit permission for this loop (see [questions to Brad](human-review-and-escalation.md#questions-to-brad)) |
-| Send a security report | Through the private channel only, per the operator's setting |
+| Send a security report | To Brad's agent through the private channel he named (else GitHub private reporting); no operator approval; one-line notice to the operator |
 | Change thresholds, tiers, gated paths | Human approval (operator, and Brad for his repo) |
 | Change a prompt, model or tool | Operator, followed by a full eval-set rerun |
 | Add a durable review rule | Coach proposes, a human approves |

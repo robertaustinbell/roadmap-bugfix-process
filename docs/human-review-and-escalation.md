@@ -97,9 +97,10 @@ data, and (if he chose a change) route a `fix` in the next round.
 Security weaknesses are reported **privately**, never as a public PR, issue,
 comment, or PR-body mention. See also [security-findings.md](security-findings.md). A public write-up is a working recipe for an attacker.
 
-1. Read the repo's `SECURITY.md` at current `main` for the channel Brad wants.
-   Today that is GitHub private vulnerability reporting, or a direct private channel
-   to Brad (or his agent) that he has named.
+1. Send it to **Brad's agent** through the private agent-to-agent channel Brad named
+   for security reports. A shared or group chat is not that channel. If no such private
+   channel is named, or `SECURITY.md` at current `main` says otherwise, use GitHub
+   private vulnerability reporting.
 2. Use **one channel per item**, never both.
 3. Confirm the finding with the [evidence bar](evidence-bar.md) and an independent
    check before sending. Grade severity honestly: a gap that only weakens one of
@@ -109,8 +110,8 @@ comment, or PR-body mention. See also [security-findings.md](security-findings.m
    step-by-step exploit.
 5. Keep the weakness out of every other PR body, commit message and comment. A fix
    folder may be prepared locally, but it carries `HOLD.md` so nothing publishes it.
-6. Whether reports go out automatically or wait for the operator's approval is the
-   operator's setting. Record which setting was in force with each report.
+6. No operator approval is needed to send (settled 2026-11-03). The operator gets one
+   line per sent report: that it went, where, and the report ID, with no detail.
 7. After filing, check the report is not publicly visible (for example, the advisory
    URL returns 404 when logged out). Record only the report ID and status in loop
    state, not the content.

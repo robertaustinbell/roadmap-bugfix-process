@@ -80,10 +80,11 @@ first: they show which behaviours he covered.
 
 ## Security
 
-Security findings go only through the private route Brad named (see
-[security findings](human-review-and-escalation.md#security-findings)). If the chat
-channel with his agent is a named private route, use it or the GitHub private
-report, one channel per item, never both.
+Security findings go to Brad's agent, without operator approval, through the private
+agent-to-agent channel Brad named (see
+[security findings](human-review-and-escalation.md#security-findings)). A shared chat is
+not that channel. With no named private channel, use the GitHub private report. One channel
+per item, never both.
 
 ## If the operator stops
 

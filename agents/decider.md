@@ -179,6 +179,7 @@ Also:
 
 - `fix` entries go to the Coordinator, which starts one Bug fixer per entry.
 - `question` entries go on the human review list with `needs: Brad`.
-- `security-private` entries go to the operator through the private route.
+- `security-private` entries go to Brad's agent through the private route, without
+  waiting for the operator (see [human review](../docs/human-review-and-escalation.md#security-findings)).
 - `park` entries go to `parked.md` with a revisit trigger.
 - `drop` entries stay in `decisions.json` as the record.

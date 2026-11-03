@@ -5,6 +5,20 @@ Each entry names the decision it feeds and its removal condition, per
 [adding a rule, a field or a gate](scorecard-and-test-set.md#adding-a-rule-a-field-or-a-gate).
 Rules live in their own pages; this page records why they are there.
 
+## 2026-11-03: open questions settled by Austin
+
+Numbers are the ones in [open-questions.md](open-questions.md).
+
+| # | Question | Settled answer | Where it lives |
+|---|---|---|---|
+| 1 | Does a maintainer review count as "addressed"? | Yes. Any maintainer action counts; CI and bots never do. | [process.md](process.md) |
+| 2 | Do reviews by Brad's own agent start a repair? | Yes, when Brad asked for them. Its merges and closes always count. Brad may revise this. | [coordination-with-brads-agent.md](coordination-with-brads-agent.md) |
+| 5 | Repair cap | One pre-PR repair, then up to 3 maintainer-requested repairs; the operator may set 2. | [human-review-and-escalation.md](human-review-and-escalation.md) |
+| 9 | Whole-file mutation ratchet as well as changed-line mutants | Both apply. | [quality-gates.md](quality-gates.md) |
+| 12 | Who approves sending a private security report | Nobody: reports go to Brad's agent through the private channel he named, with a one-line notice to the operator. | [human-review-and-escalation.md](human-review-and-escalation.md#security-findings) |
+
+Undo for 12: a report reaches anyone other than Brad's side, or Brad asks for a different route.
+
 ## 2026-11-04: the owner starts the loop and agrees what it works on
 
 Austin's rules: the Coordinator talks with the user (Austin; Brad through Austin) about what
