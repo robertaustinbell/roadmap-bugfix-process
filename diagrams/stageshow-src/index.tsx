@@ -5,14 +5,15 @@ import './defect-loop.css'
 // right: findings gather into the Decider, confirmed bugs go through the Bug
 // fixer's gates into PRs, Brad acts on each PR, and the outcomes travel back
 // over the top to the Decider and the Coordinator, which starts the next
-// round. The Coach watches the whole field and changes nothing.
+// round. The Coach runs whenever anything in the field runs, changes nothing,
+// and sends numbered feedback items that each role answers on its next run.
 
 type S = { phase: number; clearing: boolean }
 const START: S = { phase: 0, clearing: false }
 const POSTER: S = { phase: 6, clearing: false }
 
 const FINDERS = ['Trail of Bits', 'Shit Mountain', 'tech-debt-audit', 'Open Code Review']
-const GATES = ['Strict tsc', 'CRAP', 'Mutation', 'Incremental review']
+const GATES = ['Strict tsc · CRAP', 'Mutation', 'Incremental review', 'Fresh reviewer']
 const PRS = [
   { id: '#41', done: 'Merged', tone: 'merged' },
   { id: '#42', done: 'Fix requested', tone: 'repair' },
@@ -57,12 +58,12 @@ export default function DefectLoop() {
           <div className="dl-coach" data-on={p >= 1 || undefined}>
             <i className="dl-coach-dot" data-sent={p >= 6 || undefined} />
             <strong>Coach</strong>
-            <States align="start" value={p >= 6 ? 'sent' : 'watch'} states={{ watch: 'observing', sent: 'feedback sent' }} />
+            <States align="start" value={p >= 6 ? 'sent' : 'watch'} states={{ watch: 'watching every run', sent: 'feedback to each role' }} />
           </div>
 
           <section className="dl-node dl-coord" data-target="coord">
             <strong>Coordinator</strong>
-            <States align="start" value={p >= 6 ? 'next' : 'run'} states={{ run: 'Round started · all 4 finders', next: 'All PRs addressed · next round' }} />
+            <States align="start" value={p >= 6 ? 'next' : 'run'} states={{ run: 'Round planned · top areas first', next: 'All PRs addressed · next round' }} />
           </section>
 
           {FINDERS.map((name, i) => (
@@ -82,7 +83,7 @@ export default function DefectLoop() {
             {GATES.map((g, i) => (
               <div key={g} className="dl-gate" style={{ ['--i' as string]: i }}><Check on={p >= 3} pending={false} size={13} /><span>{g}</span></div>
             ))}
-            <footer>PR notes: Testing · Risk · Revert<br />Never merges or edits its tests</footer>
+            <footer>Approval binds code + PR text<br />Never merges or edits its tests</footer>
           </section>
 
           <section className="dl-node dl-card dl-prs" data-target="prs" data-on={p >= 4 || undefined}>
@@ -125,8 +126,8 @@ export default function DefectLoop() {
           </section>
           <section className="dl-yard dl-test">
             <header><strong>Test set</strong><span>rerun on any change</span></header>
-            <p>Closed or reverted PRs · bugs the finders missed · known-clean code</p>
-            <p className="dl-guard">Rerun the Decider and finders when prompts, model or tools change</p>
+            <p>Closed or reverted PRs · missed bugs · held-out cases</p>
+            <p className="dl-guard">Rerun in a sealed copy when prompts, model or tools change</p>
           </section>
           </div>
           <span className="dl-yard-label" data-on={p >= 6 || undefined}>PR outcomes feed both</span>
