@@ -104,7 +104,10 @@ Also:
 7. **Check for a decision.** If the right fix requires choosing behaviour (skip vs
    block, how to read user input, what a bot should say, a clinical threshold, a
    schema or merge rule, a security policy), or reverses a written decision, route
-   `question` or `human-review`. Do not route `fix`.
+   `question` or `human-review`. Do not route `fix`. In an area the round plan scores
+   Impact 3, also route `question` or `human-review` when the fix would change anything
+   a user sees beyond correcting the confirmed wrong result
+   ([prioritization.md](../docs/prioritization.md#caution-where-the-stakes-are-highest)).
 8. **Grade.** Set severity from reachable impact and safeguards, not the finder's
    label. Set risk from what a fix would touch
    ([table](../docs/evidence-bar.md#severity-and-risk)). High risk needs a Level 1

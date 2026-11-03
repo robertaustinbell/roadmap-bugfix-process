@@ -103,9 +103,9 @@ For private reports include only the ID and the affected paths, never the conten
    file. A second failure is recorded as `not-run` with the reason; the round
    continues without it and the gap is stated in `ROUND.json`.
 9. **Start the Decider** with all `findings.json` files, `known.json`, and the
-   outcomes since the last round. Then order the fix queue: owner questions out
-   first in one batch, then fixes by severity, user impact, confidence and size, up
-   to `fix_slots`.
+   outcomes since the last round. Then order the fix queue: fixes for broken earlier loop
+   changes first, then owner questions in one batch, then fixes by severity, user
+   impact, confidence and size, up to `fix_slots`.
 10. **Start Bug fixers** for each `fix` route in `decider/decisions.json`. Group
    fixers by code area so two fixers never edit the same file. Limit concurrency to
    what the machine can carry (full suites run one at a time).

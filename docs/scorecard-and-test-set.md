@@ -48,3 +48,7 @@ Do not adopt a change that does worse on any section without a human decision.
 When Brad makes the same kind of comment twice, the Coach proposes a durable rule: a lint rule,
 a test, or a line in the code standard ([code-standard.md](code-standard.md)). A human approves it
 before it lands. The Coach never edits anything itself.
+
+The same applies to the loop's own finds: when the same kind of bug is confirmed three
+times, the Coach proposes a check (lint rule, test or CI check) that stops that kind from
+coming back. Track repeat kinds per round; they should fall toward zero.

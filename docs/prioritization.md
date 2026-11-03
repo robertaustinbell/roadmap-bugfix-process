@@ -69,10 +69,28 @@ check it against the exploration share (see below).
 5. **Stop at the budget.** A round ends when the budget is spent, not when the repo is
    covered. What did not fit goes to `deferred` with its staleness counter.
 
+## Caution where the stakes are highest
+
+The loop does not pay for its mistakes; the maintainer and the app's users do. Sending
+the most effort to the highest-impact code also means the riskiest changes come first,
+so caution has to rise with impact. For a `fix` in an area with Impact 3:
+
+- The change is limited to the confirmed bug's sites. No refactor or clean-up rides along.
+- The failing test shows the wrong result the user would get, not only an internal value.
+- The reviewer runs on a different model where one is available. If not, the PR says the
+  review was same-model.
+- If the right fix would change anything a user sees beyond correcting the confirmed
+  wrong result, route it as `question` or `human-review` instead, or offer a test-only
+  PR that pins the bug and let the maintainer choose the fix.
+
 ## Ordering the fix queue
 
 After the Decider routes findings, the Coordinator orders the fix queue:
 
+0. **Broken loop fixes come first.** A loop change that was reverted, needed a fix-forward,
+   or caused a reported problem goes to the front, ahead of every new find. Its PR says
+   plainly which earlier PR caused it and what went wrong, and the case is added to the
+   test set.
 1. **Questions for the owner go out first**, in one batch, because answers unblock or
    cancel fixes.
 2. Then fixes by severity, then user impact, then confidence, then size (smaller first
@@ -99,10 +117,14 @@ A round ends in one of these states, written to `round.json` as `end_state`:
 
 Each round, the Coach and the scorecard compare the plan with what happened:
 
-- Confirmed bugs per million finder tokens, focus share against exploration share. Count
-  bugs after merging duplicates of the same underlying problem, so splitting one finding
-  into several cannot improve a score. If exploration matches or beats focus for two
-  rounds, the scoring is not working.
+- The goal is a safer app for little of the maintainer's time, not a count of bugs. So
+  the main measure is fixes that held (`held_30d`) per hour of maintainer review time,
+  with finder tokens as the cost. Confirmed bugs are an early signal only, used before
+  outcomes are in.
+- Compare focus against exploration on that measure (or on confirmed bugs, while
+  outcomes are pending). Count bugs after merging duplicates of the same underlying
+  problem, so splitting one finding into several cannot improve a score. If exploration
+  matches or beats focus for two rounds, the scoring is not working.
 - Bugs found from outside the loop, and whether their area was deferred. A miss in a
   deferred area is evidence for adding or reweighting a signal.
 - Rounds per area: no area may exceed the coverage floor.

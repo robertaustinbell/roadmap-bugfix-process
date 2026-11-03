@@ -225,6 +225,11 @@ verbatim and its class:
 - `intentional`: Brad said the behaviour is by design;
 - `didnt-matter`: Brad said it was not worth the change.
 
+When a merged loop change is reverted, needs a fix-forward, or causes a reported
+problem, it is the loop's own miss. The fix for it goes first in the next round, ahead
+of new finds, and its PR names the earlier PR and what went wrong in plain words. The
+case joins the test set so the same miss is caught next time.
+
 Closed PRs are read in full. Most closures so far were Brad ruling on a product or
 clinical choice he had not made yet (for example PRs #469, #484 and #510), not false
 bugs. The Decider reads these outcomes at the start of every round.
@@ -309,6 +314,13 @@ When Brad makes the same kind of comment twice, the Coach proposes a durable rul
 a lint rule, a test, or one line in the review guide the Bug fixer reads
 (`$STATE_DIR/review-guide.md`). A human (the operator, or Brad) approves before it
 lands. The Coach never writes the rule into effect itself.
+
+**The loop's own repeats count too.** When the Decider confirms the same kind of bug
+(same mechanism, different place) three times, the Coach proposes a check that stops
+that kind from coming back: a lint rule, a test, or a CI check for Brad's repo, offered
+to him as its own PR or question. The aim is a repo that needs the loop less over time.
+The scorecard tracks repeat kinds; they should fall toward zero. A kind the loop keeps
+finding round after round means the loop is acting as a crutch, not a fix.
 
 ## 7. Common finding schema
 
