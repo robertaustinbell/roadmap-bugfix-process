@@ -16,7 +16,7 @@ Checks every file git knows about (tracked, plus untracked files that are not ig
 5. Every agent template in agents/ is linked from at least one page, so none is orphaned.
 6. Every skill in skills/ is valid for both the Agent Skills standard (Claude and others) and
    Hermes Agent: only standard frontmatter fields, a name that matches its folder, a
-   description of 60 characters or less, string-only metadata, no links that leave the skill
+   description of 1024 characters or less whose first sentence fits Hermes's 60, string-only metadata, no links that leave the skill
    folder (it may be installed on its own), and a command named in it that exists in the kit.
 
 What it does not prove: that the rules are followed, that the docs are correct, or that
@@ -68,7 +68,7 @@ RULES = [
     ('docs/independent-review.md', 'Where the verdict lives (and where it must not)', 'Never post a `VERDICT:` line on GitHub'),
 ]
 
-TEXT_EXT = {'.md', '.py', '.json', '.txt', '.csv', '.css', '.tsx', '.ts', '.js', '.yml', '.yaml', '.toml', ''}
+TEXT_EXT = {'.example', '.md', '.py', '.json', '.txt', '.csv', '.css', '.tsx', '.ts', '.js', '.yml', '.yaml', '.toml', ''}
 BINARY_OK = {'.png', '.mp4', '.jpg', '.jpeg', '.gif', '.svg', '.pdf'}
 
 
@@ -264,8 +264,12 @@ def check_skills(root, files):
             problems.append(f'{f}: name must be lowercase letters, digits and single hyphens, 64 or less')
         elif name != folder:
             problems.append(f'{f}: name "{name}" must match its folder "{folder}"')
-        if not isinstance(desc, str) or not desc or len(desc) > 60:
-            problems.append(f'{f}: description must be 1 to 60 characters (Hermes limit; standard allows 1024)')
+        first = desc.split('. ')[0].rstrip('.') + '.' if isinstance(desc, str) else ''
+        if not isinstance(desc, str) or not desc or len(desc) > 1024:
+            problems.append(f'{f}: description must be 1 to 1024 characters')
+        elif len(first) > 60:
+            problems.append(f'{f}: the description\'s first sentence must be 60 characters or less '
+                            '(the Hermes index shows 60; the rest is for matching requests)')
         comp = fm.get('compatibility', '')
         if comp and (not isinstance(comp, str) or len(comp) > 500):
             problems.append(f'{f}: compatibility must be a string of 500 characters or less')

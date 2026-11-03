@@ -2,30 +2,24 @@
 # Install with `crontab -e` and replace every <...>. Cron runs with a minimal environment, so set PATH
 # to include git, gh, node, ocr and your agent CLI.
 #
+# Loop settings (STATE_DIR, OWNERS, GH_FORK_OWNER, MAINTAINER_LOGINS, COACH_CMD, ...) come from loop.env
+# in this repo's root: every script reads it, so nothing below needs to repeat them. Copy
+# loop.env.example to loop.env and fill it in; `python3 scripts/loopenv.py check` must print ok.
+#
 # Notices: mech.py sends them through NOTIFY_CMD (text on stdin). Without it they go to stdout, which
 # cron mails or drops.
 
 SHELL=/bin/sh
 PATH=<dirs with python3, git, gh, node, ocr, gitleaks, your agent CLI>:/usr/bin:/bin
 REPO=<path-to-this-repo>
-OCR_PIPELINE_CONFIG=<path-to>/ocr-pipeline.json
-NOTIFY_CMD=<path-to-your-notify-script>
-# publish driver settings, inherited when mech.py launches the driver
-GH_FORK_OWNER=<your-github-login>
-ATTRIBUTION=<your PR sign-off line>
-
-# Coach watch (scripts/coach/watch.py). STATE_DIR turns it on; mech.py then registers scans and runs
-# `watch.py tick` itself. COACH_CMD is your agent CLI given agents/coach.md as the prompt.
-STATE_DIR=<loop-state-dir>
-COACH_CMD=<agent-cli> --prompt-file <path-to-this-repo>/agents/coach.md
-WATCH_FILES=scorecard.csv:outcomes.jsonl:<fixes-dir>/published.jsonl
+# The Coach watch (scripts/coach/watch.py) is on when STATE_DIR is set in loop.env; mech.py then
+# registers scans and runs `watch.py tick` itself.
 
 # Mechanics tick, every 15 minutes (no AI).
 */15 * * * * python3 -I "$REPO/scripts/ocr/mech.py" >> "<log-dir>/ocr-mech.cron.log" 2>&1
 
 # Coordinator tick: only after the owner started a session (session.py gate), and always watched.
-# It never starts the loop: with no session the gate fails and nothing runs.
-OWNERS=austin
+# It never starts the loop: with no session, or an expired one, the gate fails and nothing runs.
 */30 * * * * python3 -I "$REPO/scripts/coordinator/session.py" gate && python3 -I "$REPO/scripts/coach/watch.py" run coordinator -- <agent-cli> "Scheduler tick, no owner present. Read and follow $REPO/agents/coordinator.md exactly." >> "<log-dir>/coordinator.cron.log" 2>&1
 
 # Coach watch tick for work that mech.py does not start (Coordinator rounds, repairs). Cheap; no AI.

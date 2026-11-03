@@ -10,6 +10,8 @@ import ast
 import importlib.util
 import json
 import os
+
+os.environ['LOOP_CONFIG'] = os.devnull  # never read a real loop.env in tests
 import shutil
 import subprocess as sp
 import sys
@@ -104,6 +106,34 @@ class StrictJson(unittest.TestCase):
             put(p, '{"x": NaN}')
             with self.assertRaises(ValueError):
                 D.strict_load(p)
+
+
+class LedgerAndTimes(unittest.TestCase):
+    def test_damaged_ledger_line_stops_with_file_and_line(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, 'published.jsonl')
+            put(p, '{"pr": 1, "effect": "open"}\n{"pr": 2, "eff\n')
+            with self.assertRaises(SystemExit) as e:
+                D.ledger_records(p, 'pr', 1)
+            self.assertIn('published.jsonl:2', str(e.exception))
+
+    def test_good_ledger_still_reads(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, 'published.jsonl')
+            put(p, '{"pr": 1}\n\n{"pr": 2}\n{"pr": 1, "x": 1}\n')
+            self.assertEqual(len(D.ledger_records(p, 'pr', 1)), 2)
+
+    def test_times_compare_by_instant_not_by_text(self):
+        gh = D.utc_time('2026-11-03T12:00:00Z', 'gh')
+        local = D.utc_time('2026-11-03T08:00:00-05:00', 'meta')  # 13:00Z
+        self.assertGreater(local, gh)
+        self.assertLess('2026-11-03T08:00:00-05:00', '2026-11-03T12:00:00Z', 'text order is wrong here')
+
+    def test_time_without_zone_is_refused(self):
+        for bad in ('2026-11-03T12:00:00', 'yesterday', ''):
+            with self.subTest(bad):
+                with self.assertRaises(SystemExit):
+                    D.utc_time(bad, 'meta')
 
 
 class Verdict(unittest.TestCase):

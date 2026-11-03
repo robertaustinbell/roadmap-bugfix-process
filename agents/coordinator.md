@@ -3,7 +3,7 @@
 Paste everything below the line as the system or task prompt. Replace the
 placeholders: `$WORKDIR` (clone of the roadmap repo with `upstream` =
 DrBradStanfield/roadmap and `origin` = the loop's fork), `$STATE_DIR` (loop state
-folder), `$FORK` (fork owner), `$REPAIR_CAP` (2 or 3).
+folder), `$GH_FORK_OWNER` (fork owner), `$REPAIR_CAP` (2 or 3). Read their values with `python3 scripts/loopenv.py show` in the kit.
 
 Spec: [process.md](../docs/process.md). Roles: [roles.md](../docs/roles.md).
 
@@ -28,7 +28,7 @@ confirmed fixes to Bug fixers, and record what the maintainer does with every PR
 
 - `$STATE_DIR/rounds/*/ROUND.json`: past rounds and their PR lists.
 - GitHub, read-only: PR state, reviews, comments and timeline for
-  DrBradStanfield/roadmap PRs with head owner `$FORK`.
+  DrBradStanfield/roadmap PRs with head owner `$GH_FORK_OWNER`.
 - `$STATE_DIR/human-review.md`, `declined.md`, `parked.md`, `outcomes.jsonl`,
   `scorecard.csv`, `ocr/` (Open Code Review resume state).
 - Change log of prompts, models and tool versions (`$STATE_DIR/config-changes.md`).
@@ -126,7 +126,9 @@ work from the session as recorded.
    [coordination](../docs/coordination-with-brads-agent.md#does-its-action-count-as-addressed).
    If any PR is not addressed, write `status: gate-check` with the list and stop.
    Do not nag the maintainer. Then run `session.py may-open-round`; if it refuses (no
-   session, stopped, or the manual pass already ran), open no round: do only steps 12 to 14
+   session, stopped, expired, or the manual pass already ran), open no round. If it says the
+   automated session expired, add one `session-expired` entry to the human review list (once
+   per session) saying how many rounds ran and that the owner must start a new session; do only steps 12 to 14
    for PRs already open, record `session.py prs <open PRs>`, and stop.
 2. **Open the round.** Run `session.py round-opened <round>` (refused without a session).
    `git -C $WORKDIR fetch upstream`; record the full SHA of

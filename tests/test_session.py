@@ -1,5 +1,7 @@
 import json
 import os
+
+os.environ['LOOP_CONFIG'] = os.devnull  # never read a real loop.env in tests
 import subprocess
 import sys
 import tempfile
@@ -89,6 +91,33 @@ class Session(unittest.TestCase):
         self.assertEqual([r['text'] for r in st['open_requests']], ['look at the sleep import code'])
         self.run_('taken', 'R1')
         self.assertEqual(json.loads(self.run_('status').stdout)['open_requests'], [])
+
+    def test_automated_session_expires_after_max_rounds(self):
+        self.env['SESSION_MAX_ROUNDS'] = '2'
+        self.run_('start', '--mode', 'automated', '--by', 'austin', '--request', 'go')
+        for rnd in ('R1', 'R2'):
+            self.run_('round-opened', rnd)
+            self.run_('pass-done', rnd)
+        r = self.run_('may-open-round')
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('expired', r.stdout)
+        self.assertEqual(self.run_('gate').returncode, 1)
+        self.assertEqual(json.loads(self.run_('status').stdout)['session']['status'], 'expired')
+        self.run_('prs', '1')
+        self.assertEqual(self.run_('gate').returncode, 0, 'open PRs still get follow-up')
+        self.assertEqual(self.run_('start', '--mode', 'automated', '--by', 'austin',
+                                   '--request', 'again').returncode, 0, 'the owner can start a new one')
+
+    def test_automated_session_expires_after_max_days(self):
+        self.run_('start', '--mode', 'automated', '--by', 'austin', '--request', 'go')
+        st = self.state()
+        st['started_epoch'] -= 15 * 86400
+        with open(os.path.join(self.tmp.name, 'session.json'), 'w') as f:
+            json.dump(st, f)
+        r = self.run_('may-open-round')
+        self.assertIn('older than 14 days', r.stdout)
+        self.env['SESSION_MAX_DAYS'] = '30'
+        self.assertEqual(self.run_('may-open-round').returncode, 0)
 
     def test_owner_talk_counts_as_activity_for_the_coach(self):
         self.run_('start', '--mode', 'automated', '--by', 'austin', '--request', 'go')

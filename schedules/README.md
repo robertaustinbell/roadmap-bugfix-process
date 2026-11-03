@@ -36,9 +36,6 @@ Save as `~/Library/LaunchAgents/org.example.ocr-mech.plist`, replace the placeho
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key><string>DIRS_WITH_GIT_GH_NODE_OCR:/usr/bin:/bin</string>
-    <key>OCR_PIPELINE_CONFIG</key><string>CONFIG_PATH/ocr-pipeline.json</string>
-    <key>NOTIFY_CMD</key><string>NOTIFY_SCRIPT_PATH</string>
-    <key>GH_FORK_OWNER</key><string>YOUR_GITHUB_LOGIN</string>
   </dict>
   <key>StartInterval</key><integer>900</integer>
   <key>StandardOutPath</key><string>LOG_DIR/ocr-mech.out</string>
@@ -46,6 +43,8 @@ Save as `~/Library/LaunchAgents/org.example.ocr-mech.plist`, replace the placeho
 </dict>
 </plist>
 ```
+
+Other settings come from `loop.env` in the kit root, which every script reads; launchd only needs `PATH`.
 
 launchd does not run a job while the Mac sleeps; it runs a missed interval once on wake. The scripts keep the machine awake only while a scan or suite is running (`KEEP_AWAKE`).
 

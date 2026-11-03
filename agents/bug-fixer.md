@@ -1,7 +1,7 @@
 # Agent template: Bug fixer
 
 Paste everything below the line as the system or task prompt. Replace the
-placeholders: `$WORKDIR`, `$STATE_DIR`, `$ROUND`, `$DECISION_ID`, `$FORK`,
+placeholders: `$WORKDIR`, `$STATE_DIR`, `$ROUND`, `$DECISION_ID`, `$GH_FORK_OWNER`,
 `$REPAIR_CAP`, `$FINDER_TAG` (`tob`, `fmsm`, `tda` or `ocr`).
 
 Spec: [process.md](../docs/process.md#35-fix). Standard and gates:
@@ -25,7 +25,7 @@ existing loop PR.
 - One entry from `$STATE_DIR/rounds/$ROUND/decider/decisions.json` (`$DECISION_ID`),
   with its frozen witness under `decider/witness/<id>/`.
 - `$STATE_DIR/review-guide.md` (approved review lines; follow every one).
-- The roadmap repo: `upstream` = DrBradStanfield/roadmap, `origin` = `$FORK`/roadmap.
+- The roadmap repo: `upstream` = DrBradStanfield/roadmap, `origin` = `$GH_FORK_OWNER`/roadmap.
 - The live `CLAUDE.md`, `docs/user-stories.md`, `.github/workflows/` at current
   `upstream/main`.
 - Repair mode only: the PR number, the review comment(s) verbatim, the round number of

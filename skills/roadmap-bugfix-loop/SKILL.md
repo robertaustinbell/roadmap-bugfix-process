@@ -1,11 +1,11 @@
 ---
 name: roadmap-bugfix-loop
-description: "Use when starting or running the roadmap bug-fix loop."
+description: 'Runs the DrBradStanfield/roadmap find-fix-PR loop. Use when the owner says start, resume, check on or stop the bug-fix loop or "the process"; asks the loop to work on a part of the roadmap code; asks why there are no new PRs; or when a scheduler continues a session the owner started.'
 license: MIT
 compatibility: "Needs a shell, git, gh signed in with push access to the loop's fork, Python 3.9+, and network access to GitHub. macOS or Linux. Written for Claude Code and Hermes Agent; any agent that can run shell commands and start separate agents can follow it."
 metadata:
   author: "Austin Bell (robertaustinbell)"
-  version: "0.1.0"
+  version: "0.2.0"
   kit: "https://github.com/robertaustinbell/roadmap-bugfix-process"
 ---
 
@@ -29,13 +29,16 @@ outside the loop.
 
 - `KIT`: a clone of the kit. If this skill sits at `skills/roadmap-bugfix-loop/` inside a
   clone, `KIT` is two folders up. Otherwise clone it (step 1).
-- `WORKDIR`: a clone of the roadmap repo with `upstream` = DrBradStanfield/roadmap and
-  `origin` = the loop's fork. `FORK`: the fork owner.
-- `STATE_DIR`: the loop's state folder, outside every repo. Never shared with another copy
-  of the loop.
-- `OWNERS`: comma-separated owner names (for now `austin`). Only owners start, stop or
-  aim the loop.
-- `COACH_CMD`: the command that starts the Coach as a separate agent (see Runtime notes).
+- **Settings live in one file**, `loop.env` in the kit root (copy `loop.env.example`; it is
+  git-ignored). Required: `STATE_DIR` (state folder, outside every repo, never shared with
+  another copy), `WORKDIR` (roadmap clone: `upstream` = DrBradStanfield/roadmap, `origin` =
+  the fork), `GH_FORK_OWNER`, `OWNERS` (for now `austin`), `MAINTAINER_LOGINS`, `COACH_CMD`
+  (see Runtime notes). Optional ones are listed in the example with their defaults.
+- **How settings reach every agent:** each script in the kit reads `loop.env` itself, so
+  subagents, the Coach and cron jobs get the same values as long as they run the kit's
+  scripts. Agents read the values for their prompts with `python3 scripts/loopenv.py show`.
+  A variable set in the environment wins over the file. No secrets in the file: the push
+  token stays only in the publisher's environment.
 - Finder tools as each `agents/finders/*.md` in the kit says, pinned outside the roadmap repo.
 
 ## Procedure
@@ -45,8 +48,9 @@ you follow the kit's Coordinator template.
 
 1. **Get the kit.** If `KIT` is not set and this skill is not inside a clone:
    `git clone https://github.com/robertaustinbell/roadmap-bugfix-process "$KIT"`.
-   Then `python3 scripts/check_kit.py`.
-   *Done when* it prints `0 problem(s)`. Otherwise stop and tell the owner.
+   Then `python3 scripts/check_kit.py` and `python3 scripts/loopenv.py check`.
+   *Done when* they print `0 problem(s)` and `ok`. Otherwise stop and tell the owner what is
+   missing.
 2. **Record the kit version.** `git -C "$KIT" rev-parse HEAD`. If it differs from the last
    kit commit in `$STATE_DIR/config-changes.md`, append a line with the date and both
    commits. A changed kit is a config change, so the Coordinator reruns the test set
@@ -108,7 +112,11 @@ Claude in a browser (no shell) cannot run the loop.
 - **The first run usually starts with the test set,** because prompts, models or the kit
   changed since the last accepted run.
 - **A scheduler never starts the loop.** `session.py gate` fails until an owner has
-  started a session.
+  started a session, and an automated session expires after 14 days or 10 rounds
+  (`SESSION_MAX_DAYS`, `SESSION_MAX_ROUNDS`); then the owner starts a new one.
+- **The owner check is a typed name, not a login.** `session.py --by` stops mistakes and
+  records who asked; it cannot tell who is typing. Start a session only on the owner's own
+  words in your conversation with them.
 
 ## Verification
 

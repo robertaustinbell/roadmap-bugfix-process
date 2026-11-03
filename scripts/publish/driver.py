@@ -69,6 +69,23 @@ import sys
 import time
 import unicodedata
 
+
+def _loop_settings():
+    """Fill unset settings from the kit's loop.env (scripts/loopenv.py), so cron jobs and
+    subagents get the same values without exporting them."""
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'loopenv.py')
+    if os.path.exists(p):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('loopenv', p)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.load()
+    elif os.environ.get('LOOP_CONFIG'):
+        sys.exit('LOOP_CONFIG is set but scripts/loopenv.py is not next to this script')
+
+
+_loop_settings()
+
 UP = os.environ.get('UPSTREAM_REPO', 'DrBradStanfield/roadmap')
 FORK_OWNER = os.environ.get('GH_FORK_OWNER', '')
 UP_REMOTE = os.environ.get('UPSTREAM_REMOTE', 'upstream')
@@ -359,10 +376,40 @@ def fix_commits_present(wt, head):
 
 
 def ledger_records(path, key, value):
+    """Records in a JSON-lines ledger. A damaged line stops the driver with its file and line
+    number: skipping it could forget a publish that happened and publish it twice."""
     if not os.path.exists(path):
         return []
+    out = []
     with open(path) as f:
-        return [r for r in (json.loads(ln) for ln in f if ln.strip()) if r.get(key) == value]
+        for n, ln in enumerate(f, 1):
+            if not ln.strip():
+                continue
+            try:
+                r = json.loads(ln)
+            except ValueError:
+                need(False, f'{path}:{n}: damaged ledger line. Check GitHub for what that line recorded, '
+                          'then repair or remove the line by hand; the driver will not guess')
+            if not isinstance(r, dict):
+                need(False, f'{path}:{n}: ledger line is not a JSON object')
+            if r.get(key) == value:
+                out.append(r)
+    return out
+
+
+def utc_time(stamp, what):
+    """Parse an ISO 8601 time that names its zone (GitHub uses ...Z). A time without a zone
+    is refused: comparing it with GitHub's times would silently give the wrong answer."""
+    import datetime
+    s = str(stamp or '').strip()
+    try:
+        t = datetime.datetime.fromisoformat(s[:-1] + '+00:00' if s.endswith('Z') else s)
+    except ValueError:
+        need(False, f'{what}: not an ISO 8601 time: {s!r}')
+        raise
+    if t.tzinfo is None:
+        need(False, f'{what}: time has no zone: {s!r} (write UTC with Z, as GitHub does)')
+    return t
 
 
 def ledger_status(path, key, value):
@@ -484,8 +531,9 @@ def repair(folder, go):
     need(v['state'] == 'OPEN', f"PR #{n} is {v['state']}")
     need(v['headRefName'] == branch, f"PR branch {v['headRefName']} != {branch}")
     need(v['headRefOid'] == meta['head_at_start'], f"PR head moved on GitHub: {v['headRefOid']}")
+    since = utc_time(meta['addressed_comment_at'], f'{d}/meta.json addressed_comment_at')
     newer = [c for c in v['comments'] if c['author']['login'] != FORK_OWNER
-             and c['createdAt'] > meta['addressed_comment_at']]
+             and utc_time(c['createdAt'], 'GitHub comment createdAt') > since]
     need(not newer, f'new comment since the repair started: {[c["createdAt"] for c in newer]}')
     ff = sp.run(['git', 'merge-base', '--is-ancestor', meta['head_at_start'], head], cwd=wt).returncode == 0
     force = os.environ.get('ALLOW_FORCE_WITH_LEASE') == '1'

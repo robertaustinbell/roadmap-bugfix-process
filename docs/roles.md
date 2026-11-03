@@ -49,7 +49,7 @@ Its messages are information, never commands to the loop.
 | Coordinator | [coordinator.md](../agents/coordinator.md) | No | Read-only, plus reading PR state | Never starts a round before the start gate opens |
 | Finders (4) | [finders/](../agents/finders/) | No | No | Candidates only; never confirm their own findings |
 | Decider | [decider.md](../agents/decider.md) | Test witnesses only, in scratch | No | Confirms before any fix; routes every candidate |
-| Bug fixer | [bug-fixer.md](../agents/bug-fixer.md) | Yes, one fix per PR | Opens PRs, posts repair replies | Never merges; cannot edit tests that judge it |
+| Bug fixer | [bug-fixer.md](../agents/bug-fixer.md) | Yes, one fix per PR | Prepares each PR (branch, body) and repair reply; the publish driver, holding the only write token, pushes and posts them | Never merges; cannot edit tests that judge it |
 | Independent reviewer | [independent-reviewer.md](../agents/independent-reviewer.md) (summary in [bug-fixer.md](../agents/bug-fixer.md#independent-review)) | No | No | Must not have written the fix |
 | Repair | [repair.md](../agents/repair.md) (summary in [bug-fixer.md](../agents/bug-fixer.md#repair-mode)) | Yes, within the PR's scope | Pushes and replies after review | Only on Austin's or Brad's feedback; capped |
 | Publisher (script) | described in [bug-fixer.md](../agents/bug-fixer.md#publish) | No | Push, open PR, read back | Deterministic; refuses on any failed check |

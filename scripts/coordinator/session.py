@@ -33,8 +33,18 @@ Commands (STATE_DIR must be set):
                                 Coordinator after it. Never passes before the first `start`.
   session.py status             the session as JSON.
 
-Owners: OWNERS (comma separated names, default "austin"). Only an owner can start, stop or
-request. Anything from another person reaches the loop through an owner.
+Owners: OWNERS (comma separated names, default "austin"). Anything from another person reaches
+the loop through an owner.
+
+What the owner check is and is not: `--by` is a typed name. It stops mistakes (a scheduler, a
+finder or a stray message cannot start the loop by accident) and records who asked. It does not
+authenticate anyone: whoever can run this script can type an owner's name. The real controls are
+the Coordinator template (it starts a session only on the owner's own words in its conversation
+with them) and who has access to the machine and the state folder.
+
+Automated sessions expire: after SESSION_MAX_DAYS days (default 14) or SESSION_MAX_ROUNDS rounds
+(default 10), whichever comes first, no new round opens and the owner must start a new session.
+Follow-up on open PRs continues, as after a stop.
 """
 import argparse
 import fcntl
@@ -43,6 +53,23 @@ import os
 import subprocess as sp
 import sys
 import time
+
+
+def _loop_settings():
+    """Fill unset settings from the kit's loop.env (scripts/loopenv.py), so cron jobs and
+    subagents get the same values without exporting them."""
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'loopenv.py')
+    if os.path.exists(p):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('loopenv', p)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.load()
+    elif os.environ.get('LOOP_CONFIG'):
+        sys.exit('LOOP_CONFIG is set but scripts/loopenv.py is not next to this script')
+
+
+_loop_settings()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WATCH = os.path.join(HERE, '..', 'coach', 'watch.py')
@@ -123,11 +150,36 @@ def check_owner(name):
                  'requests from anyone else reach the loop through an owner')
 
 
+def limits():
+    return float(os.environ.get('SESSION_MAX_DAYS', '14')), int(os.environ.get('SESSION_MAX_ROUNDS', '10'))
+
+
+def expired(s):
+    """Why an automated session has run out, or ''. Manual sessions end by themselves."""
+    if not s or s.get('mode') != 'automated' or s.get('status') != 'active':
+        return ''
+    days, rounds = limits()
+    started = s.get('started_epoch')
+    if started is None:
+        try:
+            started = time.mktime(time.strptime(s['started_at'][:19], '%Y-%m-%dT%H:%M:%S'))
+        except (KeyError, ValueError):
+            return 'start time unreadable'
+    if time.time() - started > days * 86400:
+        return f'older than {days:g} days'
+    if len(s.get('rounds', [])) >= rounds:
+        return f'ran {rounds} rounds'
+    return ''
+
+
 def active(s):
-    return bool(s) and s.get('status') == 'active'
+    return bool(s) and s.get('status') == 'active' and not expired(s)
 
 
 def may_open(s):
+    why = expired(s)
+    if why:
+        return False, f'automated session expired ({why}): the owner must start a new one'
     if not active(s):
         return False, 'no active session: the owner has not started the loop'
     if s['mode'] == 'manual' and s.get('rounds'):
@@ -183,6 +235,8 @@ def main(argv):
 
         if a.cmd == 'start':
             check_owner(a.by)
+            if s and expired(s):
+                s.update(status='expired', expired_reason=expired(s), expired_at=now_iso())
             if active(s):
                 sys.exit(f"session.py: a {s['mode']} session is already active (started {s['started_at']}); stop it first")
             sc = scope(a)
@@ -190,7 +244,7 @@ def main(argv):
                 sys.exit('session.py: a manual pass needs a scope (--areas, --finders or --kinds)')
             if not a.request.strip():
                 sys.exit('session.py: --request must hold the owner\'s words')
-            s = {'mode': a.mode, 'status': 'active', 'started_by': a.by, 'started_at': now_iso(),
+            s = {'mode': a.mode, 'status': 'active', 'started_by': a.by, 'started_at': now_iso(), 'started_epoch': time.time(),
                  'request_verbatim': a.request, 'agreed': a.agreed, 'scope': sc,
                  'rounds': [], 'round_in_progress': None}
             save(sd, s)
@@ -259,6 +313,8 @@ def main(argv):
                 return 1
             return 1 if coordinator_working() else 0
         elif a.cmd == 'status':
+            if s and expired(s):
+                s = dict(s, status='expired', expired_reason=expired(s))
             print(json.dumps({'session': s, 'open_requests': [r for r in requests(sd) if not r.get('taken_by')]}, indent=2))
     return 0
 

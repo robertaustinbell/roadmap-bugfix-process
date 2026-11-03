@@ -5,6 +5,21 @@ Each entry names the decision it feeds and its removal condition, per
 [adding a rule, a field or a gate](scorecard-and-test-set.md#adding-a-rule-a-field-or-a-gate).
 Rules live in their own pages; this page records why they are there.
 
+## 2026-11-03: fixes from an outside review
+
+An outside review of the kit raised eight points. Each was checked against the code; all held.
+
+| Change | Why | Undo when |
+|---|---|---|
+| `session.py` says plainly that `--by` is a typed name that stops mistakes, not a login; the real control is the Coordinator starting a session only on the owner's own words | It read like an enforced control | Never removed |
+| Automated sessions expire after `SESSION_MAX_DAYS` (14) or `SESSION_MAX_ROUNDS` (10); open PRs still get follow-up; the Coordinator puts one `session-expired` entry on the human review list | Once started, the scheduled gate passed forever | Owners restart every session at the limit for 3 sessions running: raise the defaults |
+| One settings file, `loop.env` (`scripts/loopenv.py`), read by every script; the environment wins; unknown keys and secret-looking names are refused; a test fails if a script reads a setting the file does not list | Settings were spread across shells, cron lines and launchd files, and subagents and cron jobs could miss them | Never removed |
+| The skill's description names DrBradStanfield/roadmap and the phrases that should start it; the checker keeps its first sentence within the Hermes 60 | "Use when starting or running the roadmap bug-fix loop" would not match "check on the process" | Never removed |
+| `roles.md`: the Bug fixer prepares PRs and replies; the publish driver, holding the only write token, posts them | Two tables disagreed | Never removed |
+| Repair checks compare comment times as instants and refuse a time with no zone | Text comparison is wrong when `meta.json` is not in UTC with Z | Never removed |
+| `watch.py --id` with no value is refused instead of crashing | Crash | Never removed |
+| A damaged ledger line still stops the driver, now naming the file and line. The review suggested tolerating it; skipping could forget a publish and publish twice | Fail loud, but make the fix quick | Never removed |
+
 ## 2026-11-03: the loop as an agent skill
 
 | Change | Why | Feeds | Undo when |

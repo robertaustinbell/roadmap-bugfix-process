@@ -32,6 +32,23 @@ import os
 import sys
 import time
 
+
+def _loop_settings():
+    """Fill unset settings from the kit's loop.env (scripts/loopenv.py), so cron jobs and
+    subagents get the same values without exporting them."""
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'loopenv.py')
+    if os.path.exists(p):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('loopenv', p)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.load()
+    elif os.environ.get('LOOP_CONFIG'):
+        sys.exit('LOOP_CONFIG is set but scripts/loopenv.py is not next to this script')
+
+
+_loop_settings()
+
 STAGES = {'queued', 'scanning', 'scan-failed', 'scanned', 'reviewing', 'held', 'done', 'usage-wait'}
 
 

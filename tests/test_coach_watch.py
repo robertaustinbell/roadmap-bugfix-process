@@ -5,6 +5,8 @@ Run from the repo root:  python3 -m unittest discover -s tests -v
 import importlib.util
 import json
 import os
+
+os.environ['LOOP_CONFIG'] = os.devnull  # never read a real loop.env in tests
 import shutil
 import subprocess as sp
 import sys
@@ -98,6 +100,12 @@ class Status(Base):
         self.assertEqual(W.status(self.c)['status'], 'idle')
         put(f, 'b\n', 'a')
         self.assertEqual(W.status(self.c)['status'], 'cooldown')
+
+    def test_id_without_value_is_refused_not_a_crash(self):
+        r = self.cli('begin', 'decider', '--id')
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('--id needs a value', r.stderr)
+        self.assertNotIn('Traceback', r.stderr)
 
     def test_bad_names_refused(self):
         for bad in ('../x', 'a/b', '', '.hidden'):

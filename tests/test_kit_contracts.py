@@ -5,6 +5,8 @@ Run from the repo root:  python3 -m unittest discover -s tests -v
 """
 import json
 import os
+
+os.environ['LOOP_CONFIG'] = os.devnull  # never read a real loop.env in tests
 import re
 import shutil
 import subprocess as sp
@@ -159,8 +161,7 @@ class SkillIsPortable(unittest.TestCase):
         self.ck = check_kit
 
     def test_the_skill_passes_the_checker(self):
-        files = [self.SKILL] + [f for f in sp.check_output(['git', 'ls-files'], cwd=ROOT, text=True).split()]
-        self.assertEqual(self.ck.check_skills(ROOT, sorted(set(files))), [])
+        self.assertEqual(self.ck.check_skills(ROOT, self.ck.git_files(ROOT)), [])
 
     def test_the_skill_starts_the_coordinator_watched_and_keeps_the_nevers(self):
         md = text(self.SKILL)
@@ -184,7 +185,8 @@ class SkillIsPortable(unittest.TestCase):
             'non-standard field': ok.replace('description:', 'version: 1\ndescription:'),
             'name/folder mismatch': ok.replace('name: demo-skill', 'name: other-skill'),
             'uppercase name': ok.replace('name: demo-skill', 'name: Demo-Skill'),
-            'long description': ok.replace('Short.', 'x' * 61),
+            'long first sentence': ok.replace('Short.', 'x' * 61 + '. Then more.'),
+            'description over 1024': ok.replace('Short.', 'Short. ' + 'x' * 1020),
             'nested metadata': ok.replace('---\n\nBody', 'metadata:\n  hermes: [a, b]\n---\n\nBody'),
             'link out of the folder': ok.replace('Body', 'See [x](../../docs/process.md)'),
             'leading blank line': '\n' + ok,
@@ -194,6 +196,75 @@ class SkillIsPortable(unittest.TestCase):
         for why, body in bad.items():
             with self.subTest(why):
                 self.assertNotEqual(self.check_text(body), [])
+
+
+class SettingsInOneFile(unittest.TestCase):
+    def setUp(self):
+        sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+        import loopenv
+        self.le = loopenv
+
+    def scripts(self):
+        for d, _, fs in os.walk(os.path.join(ROOT, 'scripts')):
+            for f in fs:
+                if f.endswith('.py') and f not in ('loopenv.py', 'check_kit.py', 'mutation_check.py'):
+                    yield os.path.join(d, f)
+
+    def test_every_setting_a_script_reads_is_documented(self):
+        read = set()
+        for p in self.scripts():
+            with open(p) as fh:
+                src = fh.read()
+            read |= set(re.findall(r"os\.environ(?:\.get\(|\[)'([A-Z][A-Z0-9_]+)'", src))
+            for tup in re.findall(r"keys = \(([^)]*)\)", src):
+                read |= set(re.findall(r"'([A-Z][A-Z0-9_]+)'", tup))
+        missing = read - set(self.le.KEYS) - self.le.INTERNAL
+        self.assertEqual(missing, set(), 'add these to KEYS in scripts/loopenv.py and loop.env.example')
+
+    def test_every_script_that_reads_settings_loads_the_file(self):
+        for p in self.scripts():
+            with open(p) as fh:
+                src = fh.read()
+            if 'os.environ' in src:
+                with self.subTest(os.path.relpath(p, ROOT)):
+                    self.assertIn('_loop_settings()', src)
+
+    def test_example_lists_every_key(self):
+        ex = text('loop.env.example')
+        for k in self.le.KEYS:
+            with self.subTest(k):
+                self.assertRegex(ex, r'(?m)^(# )?' + k + '=')
+
+    def test_file_rules(self):
+        P, E = self.le.parse, self.le.ConfigError
+        self.assertEqual(P('# c\nSTATE_DIR="/s"\nOWNERS=\n'), {'STATE_DIR': '/s'})
+        for bad in ('GH_TOKEN=x', 'API_KEY=x', 'STAET_DIR=/s', 'not a line'):
+            with self.subTest(bad):
+                with self.assertRaises(E):
+                    P(bad)
+
+    def test_environment_wins_and_subprocesses_inherit(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = os.path.join(d, 'loop.env')
+            with open(cfg, 'w') as f:
+                f.write(f'STATE_DIR={d}/state\nOWNERS=austin,brad\n')
+            env = dict(os.environ, LOOP_CONFIG=cfg, OWNERS='austin')
+            env.pop('STATE_DIR', None)
+            s = os.path.join(ROOT, 'scripts', 'coordinator', 'session.py')
+            r = sp.run([sys.executable, '-I', s, 'start', '--mode', 'automated', '--by', 'brad',
+                        '--request', 'go'], env=env, capture_output=True, text=True)
+            self.assertIn('not an owner', r.stderr, 'OWNERS from the environment beats the file')
+            r = sp.run([sys.executable, '-I', s, 'start', '--mode', 'automated', '--by', 'austin',
+                        '--request', 'go'], env=env, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertTrue(os.path.exists(os.path.join(d, 'state', 'session.json')), 'STATE_DIR came from the file')
+
+    def test_missing_named_file_fails_loudly(self):
+        env = dict(os.environ, LOOP_CONFIG='/nonexistent/loop.env')
+        r = sp.run([sys.executable, '-I', os.path.join(ROOT, 'scripts', 'coordinator', 'session.py'), 'status'],
+                   env=env, capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('does not exist', r.stderr)
 
 
 class SchemasParse(unittest.TestCase):
