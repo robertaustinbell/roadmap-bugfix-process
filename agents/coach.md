@@ -40,8 +40,11 @@ keep coming back.
 ## Scorecard this round
 | finder | PRs | merged | closed | open | Decider precision | median repair rounds | median hours on Brad | reverts/fix-forwards |
 
+## Predictions (written before this round's results)
+- <what you expect to see, e.g. "OCR part 7 will yield >=2 confirmed"> | written: <ISO time> | result: met / not met / no signal
+
 ## Reliability
-- <observation> | evidence: <path or PR> | suggested change: <...> | to: <role>
+- <observation> | stage: <perception | comprehension | projection | decision | execution | feedback> | evidence: <path or PR> | suggested change: <...> | to: <role>
 
 ## Efficiency
 - ...
@@ -53,7 +56,13 @@ keep coming back.
 - <comment pattern> seen in PR #a, #b | proposed durable rule: <lint/test/review line> | status: proposed
 
 ## Eval-set check
-- config changed since last eval: yes/no | eval rerun: yes/no | result vs last: better/same/worse
+- config changed since last eval: yes/no | eval rerun: yes/no | result vs last: better/same/worse/no_signal
+
+## Selection check
+- blind re-check of dropped/parked items (run by the Coordinator): <n> checked, <m> turned out real
+
+## Gates and rules that did nothing
+- <gate or rule> | rounds since it last changed an outcome: <n> | removal condition met: yes/no
 ```
 
 Entries on `$STATE_DIR/human-review.md` with category `coach-proposal` for any
@@ -68,6 +77,23 @@ durable rule or process change.
 
 ## What to look for
 
+**Name the earliest stage that failed.** When something went wrong, do not stop at
+the last visible symptom. Classify it by the first stage that broke, and suggest the
+repair there:
+
+| Stage | Failed when the agent |
+|---|---|
+| perception | did not see the fact (file not read, output cut off, tool returned nothing) |
+| comprehension | saw it and misread it (wrong unit, wrong caller, misread intent) |
+| projection | understood it but predicted the effect wrong (missed a sibling site, a race) |
+| decision | predicted right but chose wrong (routed `fix` where a choice was needed) |
+| execution | chose right and did it wrong (bad edit, wrong branch, skipped a gate) |
+| feedback | the result was never checked, or the check could not have failed |
+
+A PR closed by Brad because a test passed against the buggy code is a feedback
+failure, even though it surfaced at review. Fixing the wording would repair the wrong
+stage.
+
 **Reliability**
 
 - Gates reported as passed that did not run, or ran at a different head.
@@ -77,6 +103,11 @@ durable rule or process change.
   independent agreeing check.
 - Agents that dropped, looped, or redid finished work; state that disagrees with
   GitHub.
+- Finder runs counted as clean that were not (error, timeout, truncated, unparseable
+  output); rounds closed `done` that should be `partial`.
+- Self-reported results nobody checked: "tests pass" with no log, "PR opened" with no
+  read-back, a dispatched job counted before its output existed.
+- Handoffs where the candidate count shrank without dropped ids.
 - Any `VERDICT:` token, real-looking personal data, or security detail in public
   text (report immediately to the operator).
 
@@ -112,7 +143,9 @@ durable rule or process change.
 
 ## Steps
 
-1. Read the inputs. Note what is missing.
+1. Read the inputs. Note what is missing. Before reading this round's results,
+   write your predictions for it (top of `feedback.md`). Do not edit them later;
+   score them at the end.
 2. While agents run, keep short observations with evidence paths. Do not interrupt
    them.
 3. After the cool-down, compute the Scorecard numbers in code from the CSV and JSONL
@@ -123,6 +156,10 @@ durable rule or process change.
 6. Add `coach-proposal` entries for durable rules and process changes.
 7. A suggestion counts as an improvement only if the eval set says so after it is
    applied. Say which suggestions need an eval rerun.
+8. Every proposal follows [adding a rule, a field or a
+   gate](../docs/scorecard-and-test-set.md#adding-a-rule-a-field-or-a-gate): the
+   decision it feeds, what it would have changed, its removal condition, and one thing
+   to remove. Proposing removals is as much your job as proposing additions.
 
 ## Rules and nevers
 

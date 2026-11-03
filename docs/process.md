@@ -163,10 +163,11 @@ and lets a round report `done` when it was not. So:
 - **Each handoff records counts**: candidates in, candidates out, and the ids dropped with a
   reason. A count that shrinks without dropped ids is a lost candidate; stop and look.
 - **A harness failure is not a test result.** Exit 126 or 127, a missing runner, an import error
-  before any test ran, or no test output: record `inconclusive`. It is not RED evidence for the
+  before any test ran, or no test output: record `could_not_run`. It is not RED evidence for the
   Decider and does not use up a repair round.
-- **Every gate reports `pass`, `fail` or `inconclusive`.** `inconclusive` blocks like `fail` but is
-  reported as its own count, so a broken tool is not read as broken code.
+- **Every gate reports `pass`, `fail` or `could_not_run`**
+  ([quality-gates.md](quality-gates.md#rules-that-apply-to-every-gate)). `could_not_run` blocks like
+  `fail` but is counted on its own, so a broken tool is not read as broken code.
 - **A round with any non-clean finder run closes as `partial`**, naming what failed, never as
   `done` or `nothing_found`.
 

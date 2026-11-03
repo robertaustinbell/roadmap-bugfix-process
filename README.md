@@ -63,11 +63,13 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
 | [docs/repo-triage-notes.md](docs/repo-triage-notes.md) | Repo-specific lessons that flipped verdicts |
 | [docs/scorecard-and-test-set.md](docs/scorecard-and-test-set.md) | How the loop is measured |
 | [docs/open-questions.md](docs/open-questions.md) | Unsettled decisions and their working answers |
+| [docs/decisions.md](docs/decisions.md) | Changes to the process, why, and what would undo them |
 | [docs/prioritization.md](docs/prioritization.md) | How the Coordinator picks what each round works on |
 | [docs/trial-static-site.md](docs/trial-static-site.md) | One full trial run on a different repo, and what it changed |
 | [agents/](agents/) | Copy-paste prompt templates for every agent |
 | [templates/](templates/) | PR body and JSON schemas for findings, gate results, reviews |
-| [scripts/](scripts/) | Portable scripts: OCR pipeline, publish driver, outcome data |
+| [scripts/](scripts/) | Portable scripts: OCR pipeline, publish driver, outcome data, kit checker |
+| [tests/](tests/) | Tests for the publish driver and for the kit's own consistency |
 | [schedules/](schedules/) | Cron, launchd, and Hermes Agent job examples |
 | [data/](data/) | Real public PR outcomes, scorecard baseline, test-set seed |
 | [diagrams/](diagrams/) | Still, animation, Mermaid, animation source |
@@ -91,9 +93,36 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
 If Brad is the operator, "Brad" in these docs is still the merge decision, and "Austin" becomes
 whoever else is available as the human reviewer. Nothing here requires Austin's accounts.
 
+## What transfers, and what has actually been run
+
+The process, the evidence bar, the gates and the schemas are written for any capable coding agent.
+That does not mean they have been run everywhere. This table claims only what has been run:
+
+| Part | Run in practice | Not yet run |
+|---|---|---|
+| Publish driver, OCR mechanics, outcome script | macOS, Python 3, `gh`, `git`, `gitleaks` | Linux (expected to work; the scripts avoid GNU-only tools), Windows |
+| Scheduling | Hermes Agent jobs | launchd and plain cron (examples only) |
+| Agent templates | One agent runtime, on DrBradStanfield/roadmap and one static-site trial ([trial-static-site.md](docs/trial-static-site.md)) | Other agent runtimes |
+| Finders | FMSM, tech-debt-audit and Open Code Review on DrBradStanfield/roadmap (each has merged PRs in [pr-outcomes.csv](data/pr-outcomes.csv)) | Trail of Bits: no PR attributed to it yet. Other repos, apart from the trial |
+
+What does not transfer without work: the repo-specific notes ([repo-triage-notes.md](docs/repo-triage-notes.md)),
+the known-flaky test list in the driver, the Risk table's clinical rows, and the test-set cases.
+If you run this somewhere new, please send a [field report](https://github.com/robertaustinbell/roadmap-bugfix-process/issues/new?template=field-report.yml):
+what you ran, on what, and what broke.
+
+## Checking the kit
+
+```sh
+python3 -m unittest discover -s tests    # driver gates, schema/template drift, the checker itself
+python3 scripts/mutation_check.py        # remove each publish gate; every removal must fail a test
+python3 scripts/check_kit.py             # public scrub, links, required rules, orphan templates
+```
+
+CI runs all three on every push ([.github/workflows/check.yml](.github/workflows/check.yml)).
+
 ## Status
 
-Process as adopted 2026-11-02. Real outcomes to date are in [data/scorecard-baseline.md](data/scorecard-baseline.md).
+Process as adopted 2026-11-02, hardened 2026-11-03 ([what changed and why](docs/decisions.md)). Real outcomes to date are in [data/scorecard-baseline.md](data/scorecard-baseline.md).
 
 ## License
 

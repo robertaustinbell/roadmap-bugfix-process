@@ -109,6 +109,23 @@ Every confirmed claim has a failing witness and a passing control.
   timezone when dates matter. Check that unknown date precision is not silently
   turned into a confirmed day.
 
+### Health-data probes
+
+Bug shapes that recur in health records. Finders check scanned code for each one;
+the Decider writes a synthetic witness for each it confirms.
+
+| Probe | What goes wrong |
+|---|---|
+| `x \|\| default` on a value that can be `0` or `""` | A real zero (0 mmHg change, 0 drinks, an empty note) is replaced by the default. Use `??` or an explicit check |
+| Dedupe keys | Two genuine readings taken in the same minute merge into one because the key is (metric, minute) |
+| Date filters on strings | `"2026-11-03T23:30-05:00" < "2026-11-04"` compares text, not instants; readings near midnight move day across timezones |
+| Fraction vs percent | SpO2 `0.98` from one source and `98` from another, graded on one scale |
+| Paired values | Systolic and diastolic stored or synced separately, so one half updates and the pair no longer matches a reading |
+| Overlapping sources | The same reading imported from the phone and a device is counted twice in averages and trends |
+| Empty from a permission-gated read | A read that returns no rows because permission was not granted is shown as "no data" instead of "not allowed" |
+| Label vs value at the boundary | The badge, colour or text says "normal" while the value sits on or past the threshold. Test exactly at each threshold and one step either side |
+| Same unit, different quantity | Two values in mg/dL measured by different methods (calculated vs direct LDL) are charted or compared as one series |
+
 ## 8. Failure, retry and uncertainty
 
 - Separate "definitely not written" from "may have been written". A lost success
@@ -122,6 +139,9 @@ Every confirmed claim has a failing witness and a passing control.
   `fetch` promise is not a complete download.
 - Read each dependency's failure contract before stubbing it. A rejected promise
   and a fulfilled `false` are different failures.
+- `array.forEach(async ...)` does not wait. Code after it runs before any of the
+  awaits finish, and their errors are lost. Test that the caller sees every result
+  and every failure.
 
 ## 9. Privacy and telemetry
 

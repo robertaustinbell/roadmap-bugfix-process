@@ -28,6 +28,8 @@ and the disagreement is reported to Austin.
 1. **Three outcomes.** Each gate ends as `pass`, `fail` or `could_not_run`.
    `could_not_run` counts as `fail`. A missing tool, a crashed run, an empty test
    selection or a report that cannot be parsed is `could_not_run`, never `pass`.
+   Report `could_not_run` as its own count: a broken tool is not broken code, and it
+   does not use up a repair round.
 2. **Bound to one head.** A gate result names the base commit and the head commit
    it ran on. Any new commit voids every gate result and every review approval for
    the old head. Rerun at the new head.
@@ -39,7 +41,18 @@ and the disagreement is reported to Austin.
 5. **Receipts.** Each gate writes a receipt: tool name and pinned version or
    commit, base, head, inputs (file and test scope), raw output path, result. Use
    [`verdict.schema.json`](../templates/verdict.schema.json).
-6. **Scratch copies.** Coverage and mutation tools write files into the tree they
+   The receipt also names the gate's own script and config by content hash
+   (`sha256` of the runner, the config file and the threshold file). The same script
+   name with two different hashes is two different gates.
+6. **A gate change voids pending results.** A change to a gate script, its config,
+   the lint rules, the scorer or a threshold voids every result not yet published.
+   Rerun them. Thresholds are fixed numbers in a file, never chosen per run; the
+   receipt validator recomputes every summary field (counts, totals, pass/fail) from
+   the raw rows and refuses a receipt whose summary disagrees.
+7. **Re-pin before push.** If `upstream/main` moved since the gates ran, rerun the
+   gates whose scope the new commits touch. A clean text merge does not mean the
+   checks still hold.
+8. **Scratch copies.** Coverage and mutation tools write files into the tree they
    score. Run them on a scratch copy of base and of head, never in the worktree the
    PR is pushed from.
 
@@ -235,11 +248,26 @@ read-only, on `<pinned base>...<head>`.
 The gates do not replace tests. Every PR also carries:
 
 - **RED:** the frozen regression fails on unchanged production code, on the
-  intended assertion. A test that passes while observing the bug is not RED.
+  intended assertion. A test that passes while observing the bug is not RED. RED
+  and GREEN come from the repo's own test command, not a one-off runner.
+- **The test asserts the symptom.** It checks what the user or caller would see
+  (the value shown, the record saved, the request sent), not a flag or helper the
+  fix introduced. A test that only passes because the fix exists proves nothing.
+- **Revert check.** The reviewer reverts each production change once and confirms
+  a test fails (`reverted_changes_detected` in the review). A change no test notices
+  is either unneeded or untested.
 - **GREEN:** the same test passes at head.
 - **Targeted tests:** every test file that imports a changed file passes at head.
+- **Tests that pin the bug are flipped first.** An existing test that asserts the
+  buggy behaviour is changed in its own commit, before the fix, with a note of why
+  its old expectation was wrong.
+- **Removing or weakening a test is accounted for.** The PR body names each deleted
+  or loosened assertion, what it protected, and where that is covered now.
 - **Full suite:** passes at the exact head, run as described in
-  [validation-and-sandbox.md](validation-and-sandbox.md#full-suite).
+  [validation-and-sandbox.md](validation-and-sandbox.md#full-suite). The receipt
+  names the new test and shows it ran.
+- **Base CI that was already red** is reported apart from the PR's own result: the
+  failing job, that it fails on base too, and that the PR does not touch it.
 
 Run the gates after the fix is final and before the last full suite. A later gate
 commit that adds only tests or docs keeps the suite result. One that changes
@@ -265,6 +293,21 @@ PR body: one short line for all gates. Example:
 > Gates at `a1b2c3d`: tsc clean (3 configs, no new errors); incremental review: no
 > new Medium+; CRAP `applyEdit` 14→9, new `isStale` 3; 12/12 changed-line mutants
 > killed.
+
+## Scope check
+
+A mechanical check on the final diff, with the Decider's confirmed claim as the
+intent. It flags, for the reviewer to justify or remove:
+
+- a new dependency, or a lockfile change;
+- a renamed or removed exported name;
+- edits to config, CI workflows, build or deploy files;
+- files whose only change is formatting;
+- a hunk far larger than the confirmed sites need (default: over 80 changed lines in
+  one hunk).
+
+A flag is not a failure. An unexplained flag is a `must_fix` for the reviewer
+(`single_fix_scope: no`).
 
 ## What is not a gate
 

@@ -146,7 +146,7 @@ Also:
   confirm the finder's claim.
 - "Not reproduced" drops a candidate only when `search_depth` is `exhaustive`.
   A bounded search leaves it `suspected` with what you tried.
-- If you could not run something, say `inconclusive`, never "not reproduced".
+- If you could not run something, say `could_not_run`, never "not reproduced".
 - Never write or edit production code. You write tests only, in scratch, plus
   the frozen witness.
 - Never decide product, clinical, schema, merge/FHIR, privacy-promise or

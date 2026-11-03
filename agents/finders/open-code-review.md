@@ -73,7 +73,10 @@ out, and the part it stopped in resumes next round.
 7. **Convert** each kept comment to the common schema: `claim` from the comment,
    `locations` from its path and lines, `smallest_test` if you can state one, and
    `unchecked` listing everything you did not verify.
-8. Mark parts `scanned` when all their files are done, and write `coverage.md`.
+8. Mark parts `scanned` when all their files are done, and write `coverage.md`. A
+   part where any file errored, timed out or hit the usage limit is not `scanned`;
+   list the files that did not finish. Write `run_status` and `files_covered` /
+   `files_total` in `findings.json` `coverage`.
 
 ## Rules and nevers
 

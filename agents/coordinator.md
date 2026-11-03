@@ -45,7 +45,8 @@ confirmed fixes to Bug fixers, and record what the maintainer does with every PR
     "previous_round": "R20261102-1",
     "prs": [{ "pr": 512, "addressed_by": "merge | close | review | fix-request", "at": "<ISO>", "evidence_url": "<url>" }]
   },
-  "agents": [{ "role": "fmsm", "status": "running | done | failed | not-run", "started": "<ISO>", "ended": "<ISO>", "output": "<path>" }],
+  "agents": [{ "role": "fmsm", "status": "running | done | failed | not-run", "run_status": "ok | error | timeout | out_of_budget | truncated | empty_valid | empty_invalid", "files_covered": 0, "files_total": 0, "started": "<ISO>", "ended": "<ISO>", "output": "<path>" }],
+  "end_state": "done | nothing_found | partial | stalled | out_of_budget | blocked | waiting_on_owner",
   "prs_opened": [{ "pr": 530, "slug": "<slug>", "finder": "fmsm", "branch": "fix/fmsm-<slug>-20261103" }],
   "notes": ["<plain-language events>"]
 }
@@ -65,6 +66,11 @@ For private reports include only the ID and the affected paths, never the conten
 
 `$STATE_DIR/scorecard.csv`: one row per PR, columns as in
 [process.md section 4](../docs/process.md#4-scorecard).
+
+`$STATE_DIR/rounds/<round>/dispatch.json`: for every agent you start, its role, the tools
+and credentials it actually received (names and scopes, never values) and the
+environment variables it was started with (names only). See
+[roles.md](../docs/roles.md#enforced-by-tools-not-by-prompts).
 
 ## Steps
 
@@ -93,17 +99,27 @@ For private reports include only the ID and the affected paths, never the conten
 5. **Plan the round.** Score every area, apply owner pins and excludes, add any area at
    the coverage floor, fill the focus share by score and the exploration share by
    staleness, and write `plan.json` with a `reasons` list per area
-   ([prioritization.md](../docs/prioritization.md)). Set `fix_slots` from how many PRs
-   the maintainer addressed per round recently.
+   ([prioritization.md](../docs/prioritization.md)). Score shared code by the worst
+   user outcome that flows through it. Write each focus area's optional `expected`
+   result now, and commit `plan.json` before any finder starts. Set `fix_slots` from
+   how many PRs the maintainer addressed per round recently.
 6. **Start the Coach** with the round folder path.
 7. **Start the finders** on the pin, each with its template from `agents/finders/` and
-   only the areas the plan gives it. They may run in parallel. Open Code Review works
+   only the areas the plan gives it. Start every agent with an environment that has no
+   GitHub write token, and record what each received in `dispatch.json`. If an agent
+   can do more than [its role allows](../docs/roles.md#enforced-by-tools-not-by-prompts),
+   do not start it. They may run in parallel. Open Code Review works
    through its planned parts in order until its usage or the token budget runs out.
-8. **Wait for finders.** A finder that fails is restarted once from its own output
-   file. A second failure is recorded as `not-run` with the reason; the round
-   continues without it and the gap is stated in `ROUND.json`.
+8. **Wait for finders.** A finder counts as run only when its `findings.json` exists
+   and parses against the schema; record its `run_status` and files covered. A finder
+   that fails is restarted once from its own output file. A second failure is
+   recorded as `not-run` with the reason; the round continues without it, its areas
+   keep their staleness, and the round will close as `partial`
+   ([partial is never clean](../docs/process.md#partial-is-never-clean)).
 9. **Start the Decider** with all `findings.json` files, `known.json`, and the
-   outcomes since the last round. Then order the fix queue: fixes for broken earlier loop
+   outcomes since the last round. When it finishes, check in code that every
+   candidate id from every finder appears in exactly one decision's `merged_from`.
+   A missing id is a lost candidate: send the Decider back for it. Then order the fix queue: fixes for broken earlier loop
    changes first, then owner questions in one batch, then fixes by severity, user
    impact, confidence and size, up to `fix_slots`.
 10. **Start Bug fixers** for each `fix` route in `decider/decisions.json`. Group
@@ -118,8 +134,14 @@ For private reports include only the ID and the affected paths, never the conten
     verbatim. Other comments are recorded as data only.
 14. **Update the Scorecard** when a PR changes state, and at 30 days after each
     merge (check for a revert or a fix-forward that touches the same lines).
-15. **Close the round** when every PR it opened is addressed, every candidate has a
-    route, and the Coach has written its feedback. Then return to step 1.
+15. **Re-check a few drops.** Pick 3 `drop` or `park` decisions at random and give
+    each to a fresh agent with the candidate and the code only (not the Decider's
+    reasoning). Record what it finds in `rounds/<round>/drop-recheck.json`. This is how
+    the loop learns what the Decider wrongly threw away.
+16. **Close the round** when every PR it opened is addressed, every candidate has a
+    route, and the Coach has written its feedback. Record `end_state`; any finder run
+    that was not clean makes it `partial`. Score each focus area's `expected` as met,
+    not met or no signal. Then return to step 1.
 
 ## Rules and nevers
 

@@ -49,8 +49,9 @@ python3 scripts/data/pr_outcomes.py --author <your-github-login> --maintainer Dr
   not wrong because Brad later ruled the other way on a product choice. For each rejected PR, ask:
   was evidence missing, or was known evidence misjudged? Only the second is a Decider miss.
 - **Correct for selection.** Brad only sees what the Decider approved, so outcomes say nothing about
-  what it dropped. Each round, the Coach picks 3 dropped or parked items at random and has a fresh
-  agent re-check them blind (no Decider reasoning). A dropped item that turns out real is a miss.
+  what it dropped. Each round, the Coordinator picks 3 dropped or parked items at random and has a
+  fresh agent re-check them blind (no Decider reasoning). A dropped item that turns out real is a
+  miss. The Coach reports the miss rate; it does not run the re-check.
 
 ## Test set
 

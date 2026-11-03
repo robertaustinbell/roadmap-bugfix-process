@@ -405,6 +405,14 @@
       "not": {
         "pattern": "VERDICT:"
       }
+    },
+    "gate_sha256": {
+      "description": "sha256 of each gate's runner script, config and threshold file at run time (quality-gates.md rule 5). A change to any of them voids this receipt.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
     }
   },
   "allOf": [

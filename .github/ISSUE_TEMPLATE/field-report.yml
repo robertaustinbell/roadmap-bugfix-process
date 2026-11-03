@@ -1,0 +1,48 @@
+name: Field report
+description: You ran some or all of this kit. Tell us what happened, good or bad.
+title: "Field report: <what you ran, where>"
+labels: [field-report]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports of failures are as useful as reports of success. Please do not include
+        security weaknesses, personal data or health data here.
+  - type: input
+    id: ran
+    attributes:
+      label: What you ran
+      description: Which parts (publish driver, OCR pipeline, agent templates, the whole loop).
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: OS, agent runtime and model, target repo (or "private").
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: Commands, error text and the kit commit you used.
+    validations:
+      required: true
+  - type: dropdown
+    id: changed
+    attributes:
+      label: Did you have to change the kit to make it work?
+      options:
+        - "No"
+        - "Yes, small changes"
+        - "Yes, large changes"
+        - "It did not work"
+    validations:
+      required: true

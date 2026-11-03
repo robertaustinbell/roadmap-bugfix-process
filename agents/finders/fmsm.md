@@ -62,7 +62,12 @@ problems, privacy gaps, and tests that pass without proving anything.
 5. Check `$KNOWN` only after each stream's own pass, then fill `known_overlap`.
 6. Merge streams, dedupe by root cause, run the report linter, convert to
    `findings.json`.
-7. State coverage per dimension (High / Medium / Low / Not assessed) and why.
+7. State coverage per dimension (High / Medium / Low / Not assessed) and why, and
+   files covered out of files in scope. A stream you could not finish is
+   `not assessed`, never clean.
+8. For code that handles health values, also run the
+   [health-data probes](../../docs/regression-review.md#health-data-probes) and record
+   which ones you checked.
 
 ## Rules and nevers
 

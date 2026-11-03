@@ -18,6 +18,10 @@ Review rules: [independent-review.md](independent-review.md).
 | Same bug in several places | Fix every site of that bug pattern in this round, not one per round. |
 | Repeats | Never report the same finding twice. Refer to its ID instead. |
 | Approval | Any new commit voids every earlier approval and gate result. |
+| Frozen intent | During repair the fixer may not edit the frozen witness, weaken any test that judges the fix, or change the Decider's `claim_verbatim`. A repair that needs any of these goes back to the Decider. |
+| Wait for checks | No repair round starts until every check on the current pushed head has finished. Repairing against half-finished CI answers the wrong question. |
+| Harness failures | A round lost to a broken tool (`could_not_run`) does not count toward the cap. Record it and fix the tool. |
+| Diff growth | A repair round may not grow the diff by more than half the original fix's changed lines without a reviewer note saying why. Steady growth means the fix is at the wrong level; send it back to the Decider. |
 | Merging | The loop never merges. |
 
 ## Pre-PR repair (reviewer asked for changes)
