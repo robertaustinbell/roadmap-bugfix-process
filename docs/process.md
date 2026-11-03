@@ -186,6 +186,10 @@ branches involved. Example from a trial: a security-header fix allowed one exact
 script by hash, and two menu fixes changed that script; each branch was green, the
 combined site would have blocked the menu.
 
+**Live check for deployable repos.** Where a fix changes what is served (headers, scripts,
+policies), compare the live output against the deployed commit before shipping. Hosts and
+CDNs inject content the repo does not contain.
+
 **Sequencing.** Do not run a structural clean-up (moving shared code, splitting files)
 in the same round as behaviour fixes that edit the same code. Fix first, then restructure
 on top, or the other way round; never in parallel.

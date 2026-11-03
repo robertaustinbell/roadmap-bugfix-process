@@ -56,5 +56,11 @@ is breadth; the Decider's confirm step is what makes it usable.
   `tests` package was on `PYTHONPATH`. Load tests by path.
 - A witness test copied into the repo kept its old relative paths. Check copied tests from
   their new location.
+- Before shipping, diff the live pages against the deployed commit. The host injected an
+  analytics script at the edge that was not in the repo; a new script policy would have
+  blocked it, and both review rounds missed it because they only read the repo.
+- The two independent review rounds found real problems the per-branch gates missed (a
+  layout jump on slow phones, and menu tests that only searched source text). Repairs
+  closed in two rounds, inside the cap.
 - Automated screenshots are evidence, not truth: full-page captures can show sticky headers
   and off-screen skip links in the wrong place. Confirm odd results with a normal viewport.
