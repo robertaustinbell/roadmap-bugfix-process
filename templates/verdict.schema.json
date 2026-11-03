@@ -1,0 +1,572 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:roadmap-bugfix-process:verdict",
+  "title": "Gate verdict",
+  "description": "Quality-gate receipt for one fix at one head. Written by the Bug fixer (self-gate) or a gate agent; read by the reviewer and the publisher. Any new commit voids it. See docs/quality-gates.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fix_id",
+    "finding_id",
+    "base",
+    "head",
+    "ran_at",
+    "gates",
+    "overall"
+  ],
+  "properties": {
+    "fix_id": {
+      "description": "Branch or slug of the fix.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{2,99}$"
+    },
+    "finding_id": {
+      "type": "string"
+    },
+    "base": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "head": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "ran_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "runner": {
+      "description": "Which role produced this receipt.",
+      "type": "string",
+      "enum": [
+        "bug_fixer_self_gate",
+        "gate_agent",
+        "repair_agent"
+      ]
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "tz": {
+          "type": "string"
+        },
+        "lockfile_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sandbox": {
+          "type": "string",
+          "enum": [
+            "container_offline",
+            "local_worktree",
+            "hosted_ci"
+          ]
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protected_tests",
+        "tsc",
+        "crap",
+        "mutation",
+        "incremental_review"
+      ],
+      "properties": {
+        "protected_tests": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateResult"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "regression_test_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "edited_protected_files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "human_approval": {
+              "description": "Only when a human approved a protected-test change for this PR.",
+              "type": "string"
+            }
+          }
+        },
+        "tsc": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateResult"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "configs": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "config",
+                  "base_errors",
+                  "head_errors",
+                  "new_errors"
+                ],
+                "properties": {
+                  "config": {
+                    "type": "string"
+                  },
+                  "base_errors": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "head_errors": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "new_errors": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "errors_on_changed_lines": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            },
+            "new_suppressions": {
+              "description": "New ts-ignore, ts-expect-error, any, or non-null assertions in strict-tier paths.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/waivedItem"
+              }
+            }
+          }
+        },
+        "crap": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateResult"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "test_scope": {
+              "description": "Test files used for coverage on both base and head.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "functions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "function",
+                  "tier",
+                  "head"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "function": {
+                    "type": "string"
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": [
+                      "strict",
+                      "ratchet"
+                    ]
+                  },
+                  "base": {
+                    "description": "Null for a new function.",
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "head": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "passes": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "mutation": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateResult"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "changed_line_mutants": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "total",
+                "killed",
+                "equivalent",
+                "survived"
+              ],
+              "properties": {
+                "total": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "killed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "timeout_detected": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "equivalent": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "survived": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "uncovered": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "mutator",
+                  "hand",
+                  "stryker"
+                ]
+              }
+            },
+            "equivalents": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/waivedItem"
+              }
+            },
+            "survivors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "line",
+                  "mutation"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "mutation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "file_scores": {
+              "description": "Ratchet tier: per-file mutation score at base and head.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "base",
+                  "head"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "base": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "head": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "incremental_review": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateResult"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "tool_pin": {
+              "type": "string"
+            },
+            "range": {
+              "type": "string"
+            },
+            "confirmed_medium_plus_introduced": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "suspected_disclosed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "touched_dimensions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "dimension",
+                  "direction",
+                  "evidence"
+                ],
+                "properties": {
+                  "dimension": {
+                    "type": "string"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "better",
+                      "same",
+                      "worse"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "overall": {
+      "description": "fail if any gate is fail or could_not_run.",
+      "type": "string",
+      "enum": [
+        "pass",
+        "pass_with_notes",
+        "fail"
+      ]
+    },
+    "notes_for_pr_body": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pr_body_gate_line": {
+      "description": "The one line that goes in the PR body. Must not contain the string VERDICT:.",
+      "type": "string",
+      "not": {
+        "pattern": "VERDICT:"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "gates": {
+            "anyOf": [
+              {
+                "properties": {
+                  "protected_tests": {
+                    "properties": {
+                      "result": {
+                        "enum": [
+                          "fail",
+                          "could_not_run"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "tsc": {
+                    "properties": {
+                      "result": {
+                        "enum": [
+                          "fail",
+                          "could_not_run"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "crap": {
+                    "properties": {
+                      "result": {
+                        "enum": [
+                          "fail",
+                          "could_not_run"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "mutation": {
+                    "properties": {
+                      "result": {
+                        "enum": [
+                          "fail",
+                          "could_not_run"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "incremental_review": {
+                    "properties": {
+                      "result": {
+                        "enum": [
+                          "fail",
+                          "could_not_run"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "overall": {
+            "const": "fail"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "gateResult": {
+      "type": "object",
+      "required": [
+        "result"
+      ],
+      "properties": {
+        "result": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "could_not_run"
+          ]
+        },
+        "tool": {
+          "type": "string"
+        },
+        "tool_version": {
+          "type": "string"
+        },
+        "raw_output": {
+          "description": "Repository-relative or $WORKDIR-relative path to the raw log.",
+          "type": "string",
+          "pattern": "^(?!/)(?!~).*$"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "if": {
+        "properties": {
+          "result": {
+            "enum": [
+              "fail",
+              "could_not_run"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "result",
+          "reason"
+        ]
+      }
+    },
+    "waivedItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "line",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mutation": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3
+        }
+      }
+    }
+  }
+}

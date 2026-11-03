@@ -1,0 +1,462 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:roadmap-bugfix-process:finding",
+  "title": "Finding",
+  "description": "One candidate or confirmed bug. Written by a finder (status candidate), updated by the Decider (status confirmed, suspected, needs_decision, declined, duplicate). Also used for pre-existing findings that a reviewer or repair sends back to the finders. Synthetic evidence only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "origin",
+    "status",
+    "title",
+    "pinned_commit",
+    "location",
+    "contract",
+    "expected",
+    "actual",
+    "trigger",
+    "evidence"
+  ],
+  "properties": {
+    "id": {
+      "description": "Stable ID, unique across rounds. Never reused. Used to avoid reporting the same finding twice.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$"
+    },
+    "origin": {
+      "description": "Which finder or step produced it.",
+      "type": "string",
+      "enum": [
+        "finder_trail_of_bits",
+        "finder_fmsm",
+        "finder_tech_debt",
+        "finder_open_code_review",
+        "pre_existing_from_review",
+        "maintainer_comment",
+        "escape"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "candidate",
+        "confirmed",
+        "suspected",
+        "latent",
+        "needs_decision",
+        "declined",
+        "duplicate"
+      ]
+    },
+    "route": {
+      "description": "Decider's routing, per docs/evidence-bar.md.",
+      "type": "string",
+      "enum": [
+        "fix",
+        "question",
+        "security-private",
+        "park",
+        "human-review"
+      ]
+    },
+    "duplicate_of": {
+      "description": "Required when status is duplicate.",
+      "type": "string"
+    },
+    "title": {
+      "description": "What goes wrong, in user terms.",
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 140
+    },
+    "pinned_commit": {
+      "description": "Full commit SHA the finding was checked at.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "location": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "description": "Repository-relative path. Never an absolute local path.",
+            "type": "string",
+            "pattern": "^(?!/)(?!~)[^\\s].*$"
+          },
+          "line_start": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "line_end": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "symbol": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "contract": {
+      "description": "The written behaviour the code violates: a user story acceptance criterion, code comment, or documented contract.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "reference"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "acceptance_criterion",
+            "code_comment",
+            "documented_contract",
+            "provider_docs",
+            "none_found"
+          ]
+        },
+        "reference": {
+          "description": "For example US-12 AC17, or path:line of the comment.",
+          "type": "string"
+        },
+        "quote": {
+          "type": "string"
+        }
+      }
+    },
+    "expected": {
+      "type": "string",
+      "minLength": 1
+    },
+    "actual": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trigger": {
+      "description": "A supported user or system action that reaches the bug, with synthetic inputs.",
+      "type": "string",
+      "minLength": 1
+    },
+    "consequence": {
+      "type": "string"
+    },
+    "bug_class": {
+      "description": "Bug pattern, used to find and fix every same-pattern site at once.",
+      "type": "string"
+    },
+    "sibling_sites": {
+      "description": "Other locations with the same bug pattern. A fix covers all of them.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "description": "failing_test or repro confirm on their own. traced_path needs two independent agreeing checks to be confirmed.",
+          "type": "string",
+          "enum": [
+            "failing_test",
+            "repro",
+            "traced_path",
+            "none"
+          ]
+        },
+        "test_path": {
+          "type": "string"
+        },
+        "test_name": {
+          "type": "string"
+        },
+        "test_sha256": {
+          "description": "Hash of the frozen regression test. The fixer may not change these bytes.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "command": {
+          "type": "string"
+        },
+        "failed_assertion": {
+          "type": "string"
+        },
+        "control": {
+          "description": "A passing control that shows the harness works.",
+          "type": "string"
+        },
+        "trace": {
+          "description": "For traced_path: the call path through real callers, path:line at the pinned commit.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "independent_checks": {
+          "description": "For traced_path: each independent agent's agreement. Two agreeing checks are needed.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "checker",
+              "agrees"
+            ],
+            "properties": {
+              "checker": {
+                "type": "string"
+              },
+              "agrees": {
+                "type": "boolean"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "synthetic_only": {
+          "description": "Must be true. No real patient or health data.",
+          "const": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "failing_test"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "test_path",
+              "command",
+              "failed_assertion",
+              "synthetic_only"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "repro"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "command",
+              "synthetic_only"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "traced_path"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "trace"
+            ]
+          }
+        }
+      ]
+    },
+    "risk": {
+      "description": "Set by what the fix would touch, not by the finder's confidence.",
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "decision_question": {
+      "description": "Required when status is needs_decision: the one question for the maintainer.",
+      "type": "string"
+    },
+    "uncertainty": {
+      "type": "string"
+    },
+    "suggested_remedy": {
+      "type": "string"
+    },
+    "security_sensitive": {
+      "description": "If true, this finding is handled privately per SECURITY.md and never written to a public file.",
+      "type": "boolean",
+      "default": false
+    },
+    "raised_in": {
+      "description": "For pre-existing findings: the PR and review round that found it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pr": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "review_finding_id": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "duplicate"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "duplicate_of"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "needs_decision"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "decision_question"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "origin": {
+            "const": "pre_existing_from_review"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "raised_in"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "confirmed"
+          },
+          "evidence": {
+            "properties": {
+              "kind": {
+                "const": "traced_path"
+              }
+            }
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "required": [
+              "independent_checks"
+            ],
+            "properties": {
+              "independent_checks": {
+                "contains": {
+                  "properties": {
+                    "agrees": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "agrees"
+                  ]
+                },
+                "minContains": 2
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "confirmed"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "failing_test",
+                  "repro",
+                  "traced_path"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "route": {
+            "const": "fix"
+          }
+        },
+        "required": [
+          "route"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "confirmed"
+          }
+        }
+      }
+    }
+  ]
+}

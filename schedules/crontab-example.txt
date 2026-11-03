@@ -1,0 +1,23 @@
+# Example crontab for the OCR pipeline without Hermes. Sanitized from a working setup; review before use.
+# Install with `crontab -e` and replace every <...>. Cron runs with a minimal environment, so set PATH
+# to include git, gh, node, ocr and your agent CLI.
+#
+# Notices: mech.py sends them through NOTIFY_CMD (text on stdin). Without it they go to stdout, which
+# cron mails or drops.
+
+SHELL=/bin/sh
+PATH=<dirs with python3, git, gh, node, ocr, gitleaks, your agent CLI>:/usr/bin:/bin
+REPO=<path-to-this-repo>
+OCR_PIPELINE_CONFIG=<path-to>/ocr-pipeline.json
+NOTIFY_CMD=<path-to-your-notify-script>
+# publish driver settings, inherited when mech.py launches the driver
+GH_FORK_OWNER=<your-github-login>
+ATTRIBUTION=<your PR sign-off line>
+
+# Mechanics tick, every 15 minutes (no AI).
+*/15 * * * * python3 -I "$REPO/scripts/ocr/mech.py" >> "<log-dir>/ocr-mech.cron.log" 2>&1
+
+# Agent tick, every 30 minutes, only when the monitor gate passes (work, and the line changed).
+# Replace <agent-cli> with your agent's non-interactive command (it must be able to run shell, git, gh
+# and edit files). The agent removes agent.lock itself when it finishes.
+*/30 * * * * line=$(python3 -I "$REPO/scripts/ocr/monitor.py" --gate) && <agent-cli> "Monitor: $line. Run one tick of the OCR roadmap pipeline. Read and follow $REPO/agents/ocr-pipeline-agent.md exactly. Settings are in $OCR_PIPELINE_CONFIG." >> "<log-dir>/ocr-agent.cron.log" 2>&1

@@ -1,0 +1,30 @@
+{
+  "_comment": "Example Hermes Agent cron jobs for the OCR pipeline. Sanitized from a working setup; review before use. Replace every <...> placeholder. Create the jobs with Hermes's cron tool or CLI using these fields; ids, timestamps and run state are filled in by Hermes. Scripts are looked up by file name in the Hermes scripts folder ($HERMES_HOME/scripts/); copy or symlink scripts/ocr/mech.py and scripts/ocr/monitor.py there under these names, with ocr-pipeline.json next to them.",
+  "jobs": [
+    {
+      "name": "OCR pipeline mechanics",
+      "_comment": "No AI. Empty stdout sends nothing; any printed text is a notice delivered to 'deliver'. Do not name the script with, or put in its text, the word that Hermes's gateway-lifecycle guard rejects (see docs/scheduling.md).",
+      "no_agent": true,
+      "script": "ocr_pipeline_mech.py",
+      "prompt": "",
+      "skills": [],
+      "schedule": { "kind": "interval", "minutes": 15 },
+      "deliver": "<your-notice-target>",
+      "enabled": true
+    },
+    {
+      "name": "OCR pipeline agent",
+      "_comment": "Runs only when the monitor's output changes. The monitor output is injected into the prompt. Pin a capable model (set model/provider) so the job does not follow a changing default.",
+      "no_agent": false,
+      "monitor_script": "ocr_pipeline_monitor.py",
+      "prompt": "Run one tick of the OCR roadmap pipeline. Read and follow <path-to-this-repo>/agents/ocr-pipeline-agent.md exactly. The monitor output in this prompt says whether there is work (idle means reply idle and stop). Settings (OCR_BASE_DIR, OCR_PIPELINE_DIR, FIXES_DIR) are in <path-to>/ocr-pipeline.json.",
+      "skills": [],
+      "model": "<pinned-model>",
+      "provider": "<pinned-provider>",
+      "schedule": { "kind": "interval", "minutes": 30 },
+      "deliver": "local",
+      "failure_deliver": "<your-notice-target>",
+      "enabled": true
+    }
+  ]
+}

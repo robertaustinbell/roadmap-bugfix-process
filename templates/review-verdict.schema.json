@@ -1,0 +1,395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:roadmap-bugfix-process:review-verdict",
+  "title": "Review verdict",
+  "description": "Output of one independent fresh reviewer for one fix at one head. Stored as a local file, never posted to GitHub. Any new commit voids an approve. See docs/independent-review.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fix_id",
+    "round",
+    "scope",
+    "base",
+    "head",
+    "reviewer",
+    "verdict",
+    "findings",
+    "checks"
+  ],
+  "properties": {
+    "fix_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{2,99}$"
+    },
+    "pr": {
+      "description": "PR number, when the PR is already open.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "round": {
+      "description": "1 for the first review. 2 and up are delta reviews.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "full_diff",
+        "delta"
+      ]
+    },
+    "base": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "head": {
+      "description": "Full SHA this verdict applies to.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "previous_head": {
+      "description": "Required for delta reviews: the last reviewed head.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "fresh_context",
+        "wrote_fix"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "independent_reviewer",
+            "delta_reviewer",
+            "orchestrator_close"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "fresh_context": {
+          "description": "Must be true for independent and delta reviewers.",
+          "type": "boolean"
+        },
+        "wrote_fix": {
+          "description": "Must be false.",
+          "const": false
+        }
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "approve",
+        "changes",
+        "needs_decision",
+        "could_not_review"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 1200
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "red_at_base",
+        "green_at_head",
+        "protected_tests_untouched",
+        "claims_match_assertions",
+        "single_fix_scope"
+      ],
+      "properties": {
+        "red_at_base": {
+          "$ref": "#/$defs/checkState"
+        },
+        "green_at_head": {
+          "$ref": "#/$defs/checkState"
+        },
+        "protected_tests_untouched": {
+          "$ref": "#/$defs/checkState"
+        },
+        "claims_match_assertions": {
+          "$ref": "#/$defs/checkState"
+        },
+        "single_fix_scope": {
+          "$ref": "#/$defs/checkState"
+        },
+        "all_sibling_sites_fixed": {
+          "$ref": "#/$defs/checkState"
+        },
+        "gate_numbers_plausible": {
+          "$ref": "#/$defs/checkState"
+        },
+        "risk_label_correct": {
+          "$ref": "#/$defs/checkState"
+        },
+        "no_owner_decision_made": {
+          "$ref": "#/$defs/checkState"
+        },
+        "reverted_changes_detected": {
+          "description": "Per production change: which tests failed when it was reverted.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "change",
+              "failing_tests"
+            ],
+            "properties": {
+              "change": {
+                "type": "string"
+              },
+              "failing_tests": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reviewFinding"
+      }
+    },
+    "still_open": {
+      "description": "Delta reviews: IDs of earlier findings not yet resolved. Refer by ID, never re-report.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "resolved": {
+      "description": "Delta reviews: IDs of earlier findings now resolved.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "decision_question": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "const": "delta"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "previous_head",
+          "still_open",
+          "resolved"
+        ],
+        "properties": {
+          "round": {
+            "minimum": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "needs_decision"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "decision_question"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "approve"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "findings": {
+            "items": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "class": {
+                      "enum": [
+                        "nit",
+                        "pre_existing"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "class": {
+                      "const": "should_fix"
+                    },
+                    "optional": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "optional"
+                  ]
+                }
+              ]
+            }
+          },
+          "still_open": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reviewer": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "independent_reviewer",
+                  "delta_reviewer"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reviewer": {
+            "properties": {
+              "fresh_context": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "checkState": {
+      "type": "string",
+      "enum": [
+        "yes",
+        "no",
+        "not_checked",
+        "not_applicable"
+      ]
+    },
+    "reviewFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "class",
+        "summary",
+        "evidence_kind"
+      ],
+      "properties": {
+        "id": {
+          "description": "Stable across rounds, for example R1-3. Never reused.",
+          "type": "string",
+          "pattern": "^R[0-9]+-[0-9]+$"
+        },
+        "class": {
+          "type": "string",
+          "enum": [
+            "must_fix",
+            "should_fix",
+            "nit",
+            "pre_existing",
+            "needs_decision"
+          ]
+        },
+        "optional": {
+          "description": "A should_fix the reviewer marks as not blocking, with a reason.",
+          "type": "boolean"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 5
+        },
+        "location": {
+          "description": "Repository-relative path:line at the reviewed head.",
+          "type": "string",
+          "pattern": "^(?!/)(?!~).*$"
+        },
+        "in_changed_code": {
+          "description": "False means the finding is pre_existing.",
+          "type": "boolean"
+        },
+        "evidence_kind": {
+          "type": "string",
+          "enum": [
+            "failing_test",
+            "surviving_mutant",
+            "repro",
+            "traced_path",
+            "claim_vs_assertion",
+            "reading"
+          ]
+        },
+        "evidence": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "suggested_fix": {
+          "type": "string"
+        },
+        "same_pattern_sites": {
+          "description": "Every other site with the same bug pattern; the repair fixes all of them.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "in_changed_code": {
+                "const": false
+              }
+            },
+            "required": [
+              "in_changed_code"
+            ]
+          },
+          "then": {
+            "properties": {
+              "class": {
+                "const": "pre_existing"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

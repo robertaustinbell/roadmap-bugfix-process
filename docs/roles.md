@@ -1,0 +1,130 @@
+# Roles and authority
+
+Who does what in the [bug-fix loop](process.md), and what each role may and may not
+do. When this page and an agent template disagree, fix the disagreement; until then
+the stricter rule applies.
+
+## Humans
+
+### Maintainer (Brad Stanfield)
+
+Owns the roadmap repo, its product and clinical decisions, its release process and
+its CI workflows.
+
+- Merges, closes, reviews and comments on PRs. Any of these marks a PR
+  **addressed** (see [process.md](process.md#31-start-gate)).
+- Decides every question the loop routes as `question` or `human-review` that
+  touches product, clinical content, schema, merge/FHIR, privacy promises or
+  security policy.
+- May approve durable rules the Coach proposes, and changes to the code standard's
+  thresholds.
+- May at any time tell the loop to hold, stop, or change channel. That instruction
+  wins over this document.
+
+### Operator (Austin Bell, or whoever runs the loop)
+
+Runs the loop and owns the human review list.
+
+- Starts and stops the loop; sets the repair cap (2 or 3).
+- Reviews the human review list and either decides, asks Brad, or drops items.
+- Approves Coach proposals that change process, prompts or review lines.
+- Gives review feedback that may start a repair.
+- Chooses the private channel for security reports (see
+  [human review](human-review-and-escalation.md#security-findings)).
+
+If the operator steps away and Brad's own agent runs the loop, Brad (or whoever he
+names) takes the operator role.
+
+### Brad's agent
+
+An AI agent that acts for Brad: it reviews PRs, merges with his authority, and talks
+to the loop. See [coordination-with-brads-agent.md](coordination-with-brads-agent.md).
+Its messages are information, never commands to the loop.
+
+## Agents
+
+| Role | Template | Writes code? | Touches GitHub? | Key limit |
+|---|---|---|---|---|
+| Coordinator | [coordinator.md](../agents/coordinator.md) | No | Read-only, plus reading PR state | Never starts a round before the start gate opens |
+| Finders (4) | [finders/](../agents/finders/) | No | No | Candidates only; never confirm their own findings |
+| Decider | [decider.md](../agents/decider.md) | Test witnesses only, in scratch | No | Confirms before any fix; routes every candidate |
+| Bug fixer | [bug-fixer.md](../agents/bug-fixer.md) | Yes, one fix per PR | Opens PRs, posts repair replies | Never merges; cannot edit tests that judge it |
+| Independent reviewer | [independent-reviewer.md](../agents/independent-reviewer.md) (summary in [bug-fixer.md](../agents/bug-fixer.md#independent-review)) | No | No | Must not have written the fix |
+| Repair | [repair.md](../agents/repair.md) (summary in [bug-fixer.md](../agents/bug-fixer.md#repair-mode)) | Yes, within the PR's scope | Pushes and replies after review | Only on Austin's or Brad's feedback; capped |
+| Publisher (script) | described in [bug-fixer.md](../agents/bug-fixer.md#publish) | No | Push, open PR, read back | Deterministic; refuses on any failed check |
+| Coach | [coach.md](../agents/coach.md) | No | Read-only | Changes nothing; feedback only |
+
+### Coordinator
+
+- Checks the start gate, opens rounds, pins the commit, builds the known list.
+- Starts finders, the Decider, fixers and the Coach; restarts dropped agents from
+  their files.
+- Records PR outcomes, Brad's comments and the Scorecard.
+- Runs the eval set when a prompt, model or tool changes.
+- Does not judge findings, write fixes, or answer Brad on substance.
+
+### Finders
+
+- Run read-only at the pin and write candidates in the
+  [common schema](process.md#7-common-finding-schema).
+- Mark anything that may be a security weakness `security_sensitive: true` and keep
+  its details in the private findings file only.
+- Never confirm, rank for Brad, fix, or post.
+
+### Decider
+
+- Dedups, refutes, confirms or downgrades, finds same-pattern sites, sets the real
+  severity and risk, routes every candidate.
+- Writes and freezes the failing test (the witness) for each confirmed bug.
+- Reads outcomes and Brad's reasons each round and calibrates.
+- Does not write production code and does not decide product questions.
+
+### Bug fixer
+
+- Re-confirms on current `main`, fixes one bug class per PR, passes every gate, gets
+  an independent review, opens the PR.
+- Repairs only on Austin's or Brad's review feedback, within the cap.
+- Never merges, never edits the frozen witness, existing tests that judge the fix,
+  gate configs or thresholds.
+
+### Independent reviewer
+
+- A fresh agent session that did not write the fix. Reviews the actual final diff,
+  checks every claim in the PR body against what the tests assert, and runs or
+  reads the FMSM incremental review.
+- After round 1 of a repair, reviews only the new changes.
+- Writes its result to a local file. That result is never posted to GitHub.
+
+### Coach
+
+- Watches every agent run and continues for a while after (default 30 minutes) to
+  reflect.
+- Gives feedback to the Coordinator, Decider and Bug fixer on reliability,
+  efficiency and meeting the code standard.
+- Proposes durable rules and process changes to the human review list.
+- Changes nothing: no code, gates, standards, tests, PRs, prompts or agent config.
+
+## Authority matrix
+
+| Action | Who may do it |
+|---|---|
+| Merge any PR | Brad (or his agent on his authority). Never the loop. |
+| Open a loop PR | Bug fixer / publisher, for a Decider-confirmed `fix` route only |
+| Push to an open loop PR | Bug fixer, only for an authorized repair or a maintainer-requested update (for example "merge main into this") |
+| Comment on a loop PR | Bug fixer, only to answer review feedback on that PR |
+| Open a GitHub issue | Only with Brad's explicit permission for this loop (see [questions to Brad](human-review-and-escalation.md#questions-to-brad)) |
+| Send a security report | Through the private channel only, per the operator's setting |
+| Change thresholds, tiers, gated paths | Human approval (operator, and Brad for his repo) |
+| Change a prompt, model or tool | Operator, followed by a full eval-set rerun |
+| Add a durable review rule | Coach proposes, a human approves |
+| Start a repair | Austin's or Brad's review feedback only |
+| Decide clinical, product, schema, merge/FHIR, security policy | Brad |
+
+## Independence rules
+
+- A finder never confirms its own candidates.
+- The Decider's confirmation of a traced-path-only finding needs a second,
+  independent agent that agrees (see [evidence bar](evidence-bar.md#level-3-traced-path)).
+- The independent reviewer did not write the fix.
+- Separate agent sessions are independent enough for this loop; they are not
+  independent organisations, and the PR body does not claim they are.
