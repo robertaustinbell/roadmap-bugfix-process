@@ -18,8 +18,8 @@ the publish driver.
 ```mermaid
 flowchart LR
   subgraph WATCHED["Coach watch: the Coach runs while anything in here runs, and for 30 minutes after"]
-    C[Coordinator<br/>starts a round only when every<br/>PR from the last round is addressed]
-    PL["Round plan<br/>impact, recent change, staleness<br/>top areas first, coverage floor"]
+    C["Coordinator<br/>never starts unless the owner started it<br/>opens a round only when every<br/>PR from the last round is addressed"]
+    PL["Round plan<br/>owner's scope and requests first<br/>then impact, recent change, staleness<br/>manual pass: only the agreed scope"]
     subgraph F[Finders on one pinned commit]
       F1[Trail of Bits skills]
       F2[fuck-my-shit-mountain]
@@ -35,9 +35,12 @@ flowchart LR
     P["PRs<br/>Testing / Risk / How to revert<br/>no PR limit"]
     M["Brad<br/>merge / close / ask for a fix"]
   end
+  O(["Owner: Austin<br/>Brad through Austin"])
   CO[Coach<br/>changes nothing<br/>writes numbered feedback items]
   SC[(Scorecard)]
   TS[("Test set<br/>held-out cases, sealed answers")]
+  O -- "start: automated or manual pass<br/>scope, requests anytime, stop" --> C
+  C -- "proposed plan, plan notices,<br/>pass results" --> O
   C --> PL --> F1 & F2 & F3 & F4
   F1 & F2 & F3 & F4 -- "run status + coverage<br/>partial is never clean" --> D
   D -- confirmed --> B
@@ -52,6 +55,7 @@ flowchart LR
   B -. "pre-existing bug found" .-> F
   M --> SC & TS
   WATCHED -. observed .-> CO
+  O -. "owner talk observed" .-> CO
   SC -. read .-> CO
   CO -- "feedback items, one role each" --> C & D & B
   C & D & B -- "reply: applied / not applied / disputed" --> CO

@@ -1,7 +1,8 @@
 import { Stage, Connector, States, Check, type Act, type Rect } from '../../kit'
 import './defect-loop.css'
 
-// The roadmap defect loop as a system story, no cursor. One round runs left to
+// The roadmap defect loop as a system story, no cursor. The owner starts the loop and
+// agrees the plan with the Coordinator. One round runs left to
 // right: findings gather into the Decider, confirmed bugs go through the Bug
 // fixer's gates into PRs, Brad acts on each PR, and the outcomes travel back
 // over the top to the Decider and the Coordinator, which starts the next
@@ -63,7 +64,7 @@ export default function DefectLoop() {
 
           <section className="dl-node dl-coord" data-target="coord">
             <strong>Coordinator</strong>
-            <States align="start" value={p >= 6 ? 'next' : 'run'} states={{ run: 'Round planned · top areas first', next: 'All PRs addressed · next round' }} />
+            <States align="start" value={p >= 6 ? 'next' : 'run'} states={{ run: 'Owner started · plan agreed', next: 'All PRs addressed · next round' }} />
           </section>
 
           {FINDERS.map((name, i) => (
