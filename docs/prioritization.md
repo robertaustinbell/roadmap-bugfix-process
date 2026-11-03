@@ -19,7 +19,8 @@ Before the finders start, the Coordinator writes `$STATE_DIR/rounds/<round>/plan
   "areas": [
     {"area": "health-core", "score": 7, "share": "focus",
      "reasons": ["clinical impact", "14 commits since last scan"],
-     "finders": ["trail-of-bits", "fmsm", "open-code-review"]},
+     "finders": ["trail-of-bits", "fmsm", "open-code-review"],
+     "expected": "at least one confirmed unit or reference-range bug"},
     {"area": "docs", "score": 1, "share": "exploration",
      "reasons": ["not scanned for 4 rounds (coverage floor)"], "finders": ["open-code-review"]}
   ],
@@ -31,6 +32,11 @@ Before the finders start, the Coordinator writes `$STATE_DIR/rounds/<round>/plan
 The plan is written down so it can be audited and checked against outcomes later. A plan
 the Coordinator cannot explain in its `reasons` list is a bad plan.
 
+`expected` is optional: what the Coordinator thinks the focus area will yield, written before the
+finders run. At round close it is scored as met, not met or no signal, and never edited afterwards.
+A Coordinator whose expectations are rarely met is scoring areas badly, which is worth knowing
+before outcomes arrive. Commit `plan.json` at round open so later edits show in history.
+
 ## Scoring an area
 
 An area is a part of the repo (the same part list Open Code Review uses). Start with
@@ -38,11 +44,17 @@ three signals, each scored 0 to 3, and add them:
 
 | Signal | Scores high when |
 |---|---|
-| Impact | Wrong behaviour could harm users: clinical meaning, data loss, privacy, payment, auth |
+| Impact | Wrong behaviour could harm users: clinical meaning, data loss, privacy, payment, auth. Score shared code by the worst user outcome it feeds, not by its folder (below) |
 | Change | Many commits or lines changed since the area was last scanned |
 | Staleness | Many rounds since the last scan (grows every round, so nothing waits forever) |
 
 Skip areas that are generated, vendored or scheduled for removal.
+
+**Impact follows the data, not the folder.** A unit converter, a reference-range table or a lab
+parser can sit in a folder that looks low-stakes while every clinical number passes through it.
+Trace each user-critical outcome (a value shown, a reminder sent, a record saved or erased) back to
+the shared code it depends on, and give that code the outcome's Impact. Record the trace in
+`reasons`. This refines Impact; it is not a fourth signal.
 
 Keep it this small until real rounds say otherwise. Each extra signal or setting is one
 more thing to tune, test and explain. Add a signal (for example past bug yield, how many
@@ -107,7 +119,8 @@ A round ends in one of these states, written to `round.json` as `end_state`:
 | State | Meaning |
 |---|---|
 | `done` | Budget spent or plan covered, PRs opened |
-| `nothing_found` | The planned areas produced no confirmed bug. A valid result, not a failure |
+| `nothing_found` | The planned areas produced no confirmed bug, and every finder run was clean. A valid result, not a failure |
+| `partial` | At least one finder run was not clean (error, timeout, truncated, unparseable output). Its areas keep their staleness ([process.md](process.md#partial-is-never-clean)) |
 | `stalled` | The focus areas confirmed nothing for two rounds in a row. Stop, re-plan, and tell the operator; the scoring may be wrong |
 | `out_of_budget` | Tokens or time ran out mid-plan. Record where each finder stopped |
 | `blocked` | A finder, tool or gate failed in a way a retry will not fix |

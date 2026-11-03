@@ -37,6 +37,35 @@
           "items": {
             "type": "string"
           }
+        },
+        "files_total": {
+          "description": "Files in scope. With files_covered, the proof that the scope was scanned.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "files_covered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "check_families": {
+          "description": "The kinds of check that actually ran.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "run_status": {
+          "description": "ok and empty_valid mean scanned. Anything else is never a clean scan (process.md, Partial is never clean).",
+          "type": "string",
+          "enum": [
+            "ok",
+            "error",
+            "timeout",
+            "out_of_budget",
+            "truncated",
+            "empty_valid",
+            "empty_invalid"
+          ]
         }
       }
     },

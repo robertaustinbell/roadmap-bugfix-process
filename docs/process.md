@@ -146,6 +146,30 @@ scanner's model usage or the round's token budget runs out. A part it stopped in
 resumes next round if the plan still includes it. It has no schedule of its own and
 no retry loop.
 
+#### Partial is never clean
+
+A finder that crashed, timed out, ran out of budget, returned something that does not parse, or
+was cut off has not scanned anything. Counting it as "found nothing" resets the area's staleness
+and lets a round report `done` when it was not. So:
+
+- **Every finder run records a status** in `findings/<finder>/run.json`: `ok`, `error`,
+  `timeout`, `out_of_budget`, `truncated`, `empty_valid` (ran fully, found nothing) or
+  `empty_invalid` (no output, or output that does not parse). Only `ok` and `empty_valid` mean the
+  area was scanned. Anything else is never a clean scan, and the area keeps its staleness.
+- **"Scanned" needs proof**: the files covered (N of M in the area) and the check families that
+  ran. A finder that covered 12 of 40 files scanned 12 files, not the area.
+- **A dispatched job counts only once its output exists and parses** against its schema. "Started"
+  and "reported done" are not results.
+- **Each handoff records counts**: candidates in, candidates out, and the ids dropped with a
+  reason. A count that shrinks without dropped ids is a lost candidate; stop and look.
+- **A harness failure is not a test result.** Exit 126 or 127, a missing runner, an import error
+  before any test ran, or no test output: record `inconclusive`. It is not RED evidence for the
+  Decider and does not use up a repair round.
+- **Every gate reports `pass`, `fail` or `inconclusive`.** `inconclusive` blocks like `fail` but is
+  reported as its own count, so a broken tool is not read as broken code.
+- **A round with any non-clean finder run closes as `partial`**, naming what failed, never as
+  `done` or `nothing_found`.
+
 ### 3.4 Decide
 
 The [Decider](../agents/decider.md):
@@ -261,8 +285,9 @@ A repair is new work on an open loop PR.
 
 A round closes when every PR it opened is addressed, every candidate has a route,
 and the Coach has written its round feedback. Record the round's `end_state`
-(`done`, `nothing_found`, `stalled`, `out_of_budget`, `blocked`, `waiting_on_owner`;
-see [prioritization.md](prioritization.md#when-a-round-stops-early)). Two `stalled`
+(`done`, `nothing_found`, `partial`, `stalled`, `out_of_budget`, `blocked`, `waiting_on_owner`;
+see [prioritization.md](prioritization.md#when-a-round-stops-early); `partial` means some finder
+run was not clean, [above](#partial-is-never-clean)). Two `stalled`
 rounds in a row mean the round plan is re-made and the operator is told before the
 next round starts. The Coordinator then checks the start
 gate for the next round.
@@ -328,8 +353,14 @@ Every finder writes this shape ([candidate.schema.json](../templates/candidate.s
 fields are allowed; these are required.
 
 Two stages, two files. Finders write **candidates** (claims) in this shape. The Decider turns each
-candidate it keeps into a **decision record** in [finding.schema.json](../templates/finding.schema.json),
-which adds `status`, `route`, `evidence` and the contract. A finder never writes `status` or `route`.
+merged candidate group into a **decision record** in
+[decision.schema.json](../templates/decision.schema.json) (the shape in
+[decider.md](../agents/decider.md#outputs)), which adds `status`, `route`, the evidence, the
+verbatim claim and the Decider's prediction. A finder never writes `status` or `route`, and no
+stage writes a later stage's result (a fixer cannot mark its own fix reviewed).
+
+`coverage` is the proof of what was scanned: `files_covered` of `files_total`, the
+`check_families` that ran, and `run_status` ([partial is never clean](#partial-is-never-clean)).
 
 ```json
 {

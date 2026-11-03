@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:roadmap-bugfix-process:finding",
   "title": "Finding",
-  "description": "One candidate or confirmed bug. Written by a finder (status candidate), updated by the Decider (status confirmed, suspected, needs_decision, declined, duplicate). Also used for pre-existing findings that a reviewer or repair sends back to the finders. Synthetic evidence only.",
+  "description": "Single-record finding shape, used to hand a pre-existing finding from a review back to the finders. The Decider's records use decision.schema.json. One candidate or confirmed bug. Written by a finder (status candidate), updated by the Decider (status confirmed, suspected, needs_decision, declined, duplicate). Also used for pre-existing findings that a reviewer or repair sends back to the finders. Synthetic evidence only.",
   "type": "object",
   "additionalProperties": false,
   "required": [

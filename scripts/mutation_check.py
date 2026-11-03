@@ -50,7 +50,7 @@ def main():
     drift = [g for g, old, _ in MUTATIONS if src.count(old) != 1]
     if drift:
         sys.exit(f'mutation text not found exactly once (update MUTATIONS): {drift}')
-    base = sp.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-q'], cwd=ROOT,
+    base = sp.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_driver.py', '-q'], cwd=ROOT,
                   capture_output=True, text=True)
     if base.returncode:
         sys.exit('tests fail on the unmutated driver; fix that first\n' + base.stderr[-2000:])
@@ -62,7 +62,7 @@ def main():
         for gate, old, new in MUTATIONS:
             with open(path, 'w') as f:
                 f.write(src.replace(old, new))
-            r = sp.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-q'], cwd=ROOT,
+            r = sp.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_driver.py', '-q'], cwd=ROOT,
                        env=dict(os.environ, DRIVER_PATH=path), capture_output=True, text=True)
             caught = r.returncode != 0
             print(f"{'caught  ' if caught else 'SURVIVED'} {gate}")

@@ -1,0 +1,372 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:roadmap-bugfix-process:decision",
+  "title": "Decision record",
+  "description": "One entry of decider/decisions.json: the Decider's ruling on one merged candidate group. Shape matches agents/decider.md; statuses and routes match docs/evidence-bar.md and docs/process.md section 3.4. tests/test_kit_contracts.py keeps the three in step.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "merged_from",
+    "title",
+    "claim_verbatim",
+    "requirement",
+    "root_cause_key",
+    "status",
+    "route",
+    "evidence_level",
+    "reason"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^D-"
+    },
+    "merged_from": {
+      "description": "Every candidate id merged into this record. A candidate missing from every record is a lost candidate.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "title": {
+      "type": "string"
+    },
+    "claim_verbatim": {
+      "description": "The finder's claim, copied exactly. The witness must assert this claim, not a nearby one.",
+      "type": "string",
+      "minLength": 1
+    },
+    "requirement": {
+      "description": "The story criterion, contract or guideline the claim says is violated.",
+      "type": "string"
+    },
+    "root_cause_key": {
+      "description": "Stable key for the underlying cause. PRs split from one cause share it and count once on the scorecard.",
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "confirmed",
+        "latent",
+        "suspected",
+        "decision-needed",
+        "refuted",
+        "known",
+        "not-pr-worthy"
+      ]
+    },
+    "route": {
+      "type": "string",
+      "enum": [
+        "fix",
+        "question",
+        "human-review",
+        "security-private",
+        "park",
+        "drop"
+      ]
+    },
+    "evidence_level": {
+      "type": "string",
+      "enum": [
+        "failing-test",
+        "reproduction",
+        "traced-path",
+        "none"
+      ]
+    },
+    "witness": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "test_file": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "red_log": {
+          "type": "string"
+        },
+        "control": {
+          "type": "string"
+        }
+      }
+    },
+    "independent_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent",
+          "result",
+          "saw"
+        ],
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "same_model": {
+            "type": "boolean"
+          },
+          "saw": {
+            "description": "What the checker was given. Only candidate+code is independent.",
+            "type": "string",
+            "enum": [
+              "candidate+code",
+              "other agent's notes"
+            ]
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "agrees",
+              "disagrees",
+              "inconclusive"
+            ]
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "reported_claims": {
+      "description": "Claims about the bug by anyone (maintainer, bot, agent). Reported, not verified, until checked by a command.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "who",
+          "claim",
+          "checked"
+        ],
+        "properties": {
+          "who": {
+            "type": "string"
+          },
+          "claim": {
+            "type": "string"
+          },
+          "checked": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "search_depth": {
+      "description": "For a not-reproduced result. Only exhaustive drops a candidate.",
+      "type": "string",
+      "enum": [
+        "bounded",
+        "exhaustive",
+        "not_applicable"
+      ]
+    },
+    "history": {
+      "description": "History of the lines a fix would change: reverts, workaround comments, or 'none found'.",
+      "type": "string"
+    },
+    "fix_level": {
+      "type": "string",
+      "enum": [
+        "component",
+        "interface",
+        "timing",
+        "feedback"
+      ]
+    },
+    "prediction": {
+      "description": "Written before the fix exists; never edited after.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "failing_test",
+        "maintainer_outcome"
+      ],
+      "properties": {
+        "failing_test": {
+          "type": "string"
+        },
+        "maintainer_outcome": {
+          "type": "string",
+          "enum": [
+            "merge",
+            "change",
+            "close"
+          ]
+        },
+        "why": {
+          "type": "string"
+        }
+      }
+    },
+    "trigger": {
+      "type": "string"
+    },
+    "expected_source": {
+      "type": "string"
+    },
+    "bug_class": {
+      "type": "string"
+    },
+    "sites": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "status"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "likely"
+            ]
+          }
+        }
+      }
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "risk": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "refutation_attempts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "question_for_brad": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "route": {
+            "const": "fix"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "witness",
+          "prediction",
+          "fix_level",
+          "history",
+          "severity",
+          "risk",
+          "sites"
+        ],
+        "properties": {
+          "status": {
+            "const": "confirmed"
+          },
+          "evidence_level": {
+            "enum": [
+              "failing-test",
+              "reproduction",
+              "traced-path"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "route": {
+            "const": "fix"
+          },
+          "risk": {
+            "const": "high"
+          }
+        },
+        "required": [
+          "route",
+          "risk"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_level": {
+            "enum": [
+              "failing-test",
+              "reproduction"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "route": {
+            "const": "question"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "question_for_brad"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "evidence_level": {
+            "const": "traced-path"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "independent_checks"
+        ]
+      }
+    }
+  ]
+}

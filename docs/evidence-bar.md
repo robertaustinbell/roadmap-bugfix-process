@@ -57,6 +57,30 @@ A traced path alone needs **two independent agents that agree**. The second agen
 gets the candidate and the code, not the first agent's conclusion, and traces it
 itself. If they disagree, or only one traced it, the candidate is **Suspected**.
 
+## Independent evidence
+
+Two checks agree only if they could have disagreed.
+
+- **Same origin counts once.** Two finders that saw the same scanner output, the same issue text or
+  each other's notes are one piece of evidence. So are two agents that read the first agent's
+  conclusion. A second trace for Level 3 gets the candidate and the code only.
+- **Same model is labelled.** A second check on the same model as the first is recorded as
+  `same_model: true`. It is a second look, good for catching slips, not independent proof. For a
+  high-risk `fix`, a same-model agreement on a traced path is not enough.
+- **A claim about the bug is not evidence about the bug.** "Already fixed", "not a bug",
+  "duplicate of #N" or "works for me", from a maintainer, a bot or another agent, is recorded as
+  `reported` until a command checks it at the current commit (the witness passes, the linked PR
+  touches this path). A closed PR is not proof the bug is gone.
+- **"Not reproduced" says how hard it looked.** Record whether the search was `bounded` (some
+  inputs, one environment) or `exhaustive` (every supported path). Only an exhaustive miss drops a
+  candidate. A bounded miss leaves it `suspected` with what was tried.
+- **The claim is stored word for word, and the test asserts that claim.** The witness must fail on
+  the finder's claim, not on a cleaner nearby claim that was easier to test. Each candidate also
+  names the requirement it violates (a story criterion, a contract, a guideline).
+- **History before routing `fix`.** Read the history of the lines the fix would change. If a
+  similar change was reverted, or a comment marks the code as a deliberate workaround, route
+  `question` with that history attached.
+
 ## Below the bar: Suspected
 
 A candidate that meets none of the levels is Suspected. Suspected items go to the

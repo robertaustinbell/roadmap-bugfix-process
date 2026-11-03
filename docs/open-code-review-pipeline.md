@@ -90,7 +90,7 @@ There is no hourly retry, and no job opens a round by itself. Only the Coordinat
 
 ### Model and usage
 
-The working setup signs OCR in with a ChatGPT subscription (`ocr auth login`). Third-party tool use draws on a separate usage pool that is shared across models. With a mid-tier model, one part of 40 to 70 files takes roughly 3 to 3.5 million tokens and about 6 minutes, and a weekly pool covered about 4 parts at high reasoning. A top-tier model emptied the pool after about 17 files. Size the first part before assuming a model fits.
+The working setup signs OCR in with a subscription plan (`ocr auth login`). On the plan first measured, third-party tool use drew on a separate usage pool shared across models; check how yours counts it. On that plan, with a mid-tier model, one part of 40 to 70 files takes roughly 3 to 3.5 million tokens and about 6 minutes, and a weekly pool covered about 4 parts at high reasoning. A top-tier model emptied the pool after about 17 files. Size the first part before assuming a model fits.
 
 OCR can also run on other providers through `custom_providers` in its config (OpenAI-compatible or Anthropic protocol; it needs native tool calling on every turn). Environment variables do not override a config file that already names a provider. To try another provider without touching the live config, give OCR its own `HOME`.
 

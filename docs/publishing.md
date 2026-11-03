@@ -44,7 +44,7 @@ Who may start a repair and the round cap are in [repair-rounds.md](repair-rounds
    - suite passes at head;
    - merges clean with current `main`;
    - **the fix commits are still there**: the branch is ahead of `main` with a non-empty diff. A rebase can silently drop them, and pushing an empty branch closes the PR. If this refuses, restore the previous tip from the reflog;
-   - no conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) or tool truncation markers (`[truncated]`, `N bytes omitted`) in the added lines, title, body or comment;
+   - no conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) or tool truncation markers (the ones `ARTIFACT_RE` in the driver lists) in the added lines, title, body or comment;
    - gitleaks passes (missing gitleaks refuses);
    - the body has exactly one filled **Testing**, **Risk** and **How to revert** section outside comments and code blocks, and no unfilled `<placeholder>`;
    - optional `ATTRIBUTION` text present; no `VERDICT:` anywhere.
