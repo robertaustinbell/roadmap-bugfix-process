@@ -147,7 +147,7 @@ tier. The exact path list is a human-owned file.
 | ID | Kind | Rule |
 |---|---|---|
 | GATE-1 [core] | Prevent | The compiler is never silenced. `tsc` strict on every project, tests included. In strict paths, no new `@ts-ignore`, `@ts-expect-error`, `any` or non-null `!` without a waiver naming the line and reason. |
-| GATE-2 [core] | Detect | CRAP 10 or less for every new function, and for every changed strict-tier function. Ratchet tier: no function's score may rise. Fix by testing first, splitting second. React components are ratchet only. |
+| GATE-2 [core] | Detect | CRAP 10 or less for every new or changed function, in both tiers. A function already over 10 at base may stay no worse than base and is flagged for a later cleanup PR; it is never split inside a bug fix. Fix by testing first, splitting second. |
 | GATE-3 [core] | Detect | No surviving or uncovered mutants on changed lines in strict paths, except equivalent mutants named with a reason. Ratchet tier: a file's mutation score may not drop. Zero killed means the harness is broken. |
 | GATE-4 | Detect | No new duplication at similarity 0.8 or above in strict paths. (Not yet part of the per-PR gates; see section 4.) |
 | GATE-5 | Prevent | Gate tools pinned by version or commit, run on a clean copy, and write a receipt (tool pin, commit, inputs, result). |

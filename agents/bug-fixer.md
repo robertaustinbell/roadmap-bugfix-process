@@ -85,7 +85,9 @@ their new location in the repo.
 9. **Gates** in order, all at the current head
    ([code-standard section 4](../docs/code-standard.md#4-per-pr-gates); procedure in
    [quality-gates.md](../docs/quality-gates.md)): three `tsc`
-   projects; CRAP on base and head with the same scope; mutation on changed lines;
+   projects; CRAP on base and head with the same scope (every new or changed function
+   10 or less; one already over 10 at base stays no worse, is marked `cleanup` and gets a
+   line in `$STATE_DIR/cleanup.md`, never a split inside this fix); mutation on changed lines;
    FMSM incremental review run by a separate agent; secret scan. Record each in
    `gates.md` and `receipt.json`. A tool that is missing or fails means the gate did
    not run: never report it as passed.

@@ -60,13 +60,16 @@ and the disagreement is reported to Austin.
 
 | Tier | Paths | CRAP rule | Mutation rule |
 |---|---|---|---|
-| Strict | `packages/health-core`, and server modules for auth, identity, erase, consent, egress, telemetry and logging. The exact list lives in a human-owned file. | Each new or changed function scores 10 or less. | No surviving or uncovered mutant on changed lines, except named equivalents. |
-| Ratchet | Everything else, including all React components. | New functions 10 or less. Changed functions no higher than at base. | Every changed-line mutant killed or named equivalent. A file's mutation score may not drop. |
+| Strict | `packages/health-core`, and server modules for auth, identity, erase, consent, egress, telemetry and logging. The exact list lives in a human-owned file. | Every new or changed function scores 10 or less. A function already over 10 at base may stay no worse than base; it is then flagged for a later cleanup PR. | No surviving or uncovered mutant on changed lines, except named equivalents. |
+| Ratchet | Everything else, including all React components. | Every new or changed function scores 10 or less. A function already over 10 at base may stay no worse than base; it is then flagged for a later cleanup PR. | Every changed-line mutant killed or named equivalent. A file's mutation score may not drop. |
 
-Grandfathering keeps old code from blocking a fix. It is not a waiver for a
-changed strict-tier function. If a strict-tier fix cannot meet the limit without a
-refactor, the gate fails and the case goes to the human-review list with the
-scratch-tested numbers for each option.
+The CRAP rule is the same in both tiers (settled 2026-11-03). A changed function
+that scored 10 or less at base must still score 10 or less. A function already over
+10 at base may stay over 10 if the fix leaves it no worse; it is never split inside a
+bug fix. The Bug fixer marks it `cleanup: true` in `verdict.json` and adds a line to
+`$STATE_DIR/cleanup.md` (path, function, base and head scores, PR). The Coordinator
+offers cleanup items to the owner; a cleanup PR is its own PR, opened only when the
+owner asks for it. A fix that makes such a function worse fails the gate.
 
 ## Gate 0: protected tests
 

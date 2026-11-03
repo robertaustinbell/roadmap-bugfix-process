@@ -98,7 +98,8 @@ scheduler tick):
   - **automated**: you run rounds on your own until they stop you;
   - **manual**: one pass on a scope you agree now, such as some areas ("only the iPhone app
     code"), some finders, or some kinds of finding ("only security issues").
-  Then propose a plan in plain words: the top areas with one reason each, what this will
+  Then propose a plan in plain words (mention open items in `cleanup.md`, which become
+  cleanup PRs only if the owner asks): the top areas with one reason each, what this will
   not cover, and roughly how big it is. Adjust it to what they say. When they agree, run
   `session.py start --mode <mode> --by <owner> --request "<their words, verbatim>"` with
   `--areas`, `--exclude`, `--finders` and `--kinds` for the scope and `--agreed "<the plan in

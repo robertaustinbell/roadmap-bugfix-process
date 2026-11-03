@@ -8,7 +8,6 @@ question; settled answers are listed in [decisions.md](decisions.md).
 | # | Question | Working answer in these docs | Decide |
 |---|---|---|---|
 | 3 | How to ask Brad a product question when issue-filing automation needs his exception | No automated issues without his exception; the question goes on the human review list and a human relays it. | Brad |
-| 4 | CRAP on changed functions: "10 or less" (strict tier) or "no worse than base" | Tiered: strict tier must be 10 or less; ratchet tier no worse than base. | Austin |
 | 6 | May a self-edit to a test that pins the bug ever happen? | No. Any existing test that pins the bug is a human-review stop. | Austin |
 | 7 | May the orchestrator close a test-only or wording-only repair delta without a fresh reviewer? | Yes, narrowly; everything else gets a fresh reviewer. | Austin |
 | 8 | Strict tsc when the root config already has about 700 errors on main | "No new errors, none on changed lines." | Brad |

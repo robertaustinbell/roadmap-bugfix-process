@@ -209,6 +209,10 @@
                   },
                   "passes": {
                     "type": "boolean"
+                  },
+                  "cleanup": {
+                    "description": "True when the function was already over 10 at base and the fix left it no worse; it is flagged for a later cleanup PR.",
+                    "type": "boolean"
                   }
                 }
               }

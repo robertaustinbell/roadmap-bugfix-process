@@ -172,7 +172,7 @@ stage.
 
 **Code standard**
 
-- Strict-tier changed functions over the CRAP limit; surviving changed-line mutants;
+- Changed functions over CRAP 10 that got worse or were not flagged for cleanup; surviving changed-line mutants;
   new Medium+ FMSM findings; ratchet-tier regressions.
 - PR bodies missing Testing, Risk or How to revert; risk set by author rather than by
   what the change touches.

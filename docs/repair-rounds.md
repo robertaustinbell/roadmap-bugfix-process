@@ -159,7 +159,7 @@ Stop repairing and put the PR on the [human-review list](human-review-and-escala
 - The fix now needs an owner decision (clinical, schema, merge/FHIR, security
   policy, product behaviour).
 - The maintainer's request conflicts with a gate (for example, a refactor that
-  breaks the CRAP ratchet on legacy code).
+  breaks the CRAP rule on legacy code).
 - The PR head moved under you to a commit you did not make.
 - Two repair rounds did not change the same blocker's status.
 - Each review round found a new kind of problem, not a missed case of a known one.

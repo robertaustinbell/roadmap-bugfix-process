@@ -445,6 +445,7 @@ $STATE_DIR/
   human-review.md          # the human review list
   declined.md              # rejected ideas with Brad's reason
   parked.md                # latent or blocked items with revisit triggers
+  cleanup.md               # functions over CRAP 10 a fix left no worse; cleanup PRs only on owner request
   review-guide.md          # approved durable review lines for the Bug fixer
   eval-set/                # section 5
   ocr/                     # Open Code Review part list and resume state
