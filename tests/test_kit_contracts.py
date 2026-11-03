@@ -150,6 +150,52 @@ class OwnerStartsTheLoop(unittest.TestCase):
         self.assertIn('watch.py" run coordinator --', line)
 
 
+class SkillIsPortable(unittest.TestCase):
+    SKILL = 'skills/roadmap-bugfix-loop/SKILL.md'
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+        import check_kit
+        self.ck = check_kit
+
+    def test_the_skill_passes_the_checker(self):
+        files = [self.SKILL] + [f for f in sp.check_output(['git', 'ls-files'], cwd=ROOT, text=True).split()]
+        self.assertEqual(self.ck.check_skills(ROOT, sorted(set(files))), [])
+
+    def test_the_skill_starts_the_coordinator_watched_and_keeps_the_nevers(self):
+        md = text(self.SKILL)
+        for needle in ('agents/coordinator.md', 'watch.py begin coordinator', 'session.py start',
+                       'Never merge', 'One fix per PR', 'VERDICT:', 'own agent with a fresh context'):
+            with self.subTest(needle):
+                self.assertIn(needle, md)
+
+    def check_text(self, body, folder='demo-skill'):
+        with tempfile.TemporaryDirectory() as d:
+            rel = f'skills/{folder}/SKILL.md'
+            os.makedirs(os.path.join(d, 'skills', folder))
+            with open(os.path.join(d, rel), 'w') as f:
+                f.write(body)
+            return self.ck.check_skills(d, [rel])
+
+    def test_checker_rejects_what_either_runtime_would_reject(self):
+        ok = '---\nname: demo-skill\ndescription: Short.\n---\n\nBody\n'
+        self.assertEqual(self.check_text(ok), [])
+        bad = {
+            'non-standard field': ok.replace('description:', 'version: 1\ndescription:'),
+            'name/folder mismatch': ok.replace('name: demo-skill', 'name: other-skill'),
+            'uppercase name': ok.replace('name: demo-skill', 'name: Demo-Skill'),
+            'long description': ok.replace('Short.', 'x' * 61),
+            'nested metadata': ok.replace('---\n\nBody', 'metadata:\n  hermes: [a, b]\n---\n\nBody'),
+            'link out of the folder': ok.replace('Body', 'See [x](../../docs/process.md)'),
+            'leading blank line': '\n' + ok,
+            'empty body': '---\nname: demo-skill\ndescription: Short.\n---\n',
+            'missing script': ok.replace('Body', 'Run scripts/nope.py'),
+        }
+        for why, body in bad.items():
+            with self.subTest(why):
+                self.assertNotEqual(self.check_text(body), [])
+
+
 class SchemasParse(unittest.TestCase):
     def test_every_schema_is_strict_json(self):
         def no_dupes(pairs):

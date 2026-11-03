@@ -5,6 +5,13 @@ Each entry names the decision it feeds and its removal condition, per
 [adding a rule, a field or a gate](scorecard-and-test-set.md#adding-a-rule-a-field-or-a-gate).
 Rules live in their own pages; this page records why they are there.
 
+## 2026-11-03: the loop as an agent skill
+
+| Change | Why | Feeds | Undo when |
+|---|---|---|---|
+| `skills/roadmap-bugfix-loop/SKILL.md`: a thin launcher in the Agent Skills format that gets the kit, records its commit as a config change, checks for another running copy, starts the Coordinator watched, and repeats the hard nevers; it copies no rules | One reliable way to start, in Claude Code and Hermes Agent, and installable by Brad's agent | How every run starts | The skill and the kit disagree twice: shrink the skill further |
+| `check_kit.py` validates every skill against both formats | A skill that only one runtime can load, or that links out of its folder, breaks when installed on its own | CI | Never removed |
+
 ## 2026-11-03: open questions settled by Austin
 
 Numbers are the ones in [open-questions.md](open-questions.md).

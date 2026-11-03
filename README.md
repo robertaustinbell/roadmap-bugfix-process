@@ -76,6 +76,7 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
 | [tests/](tests/) | Tests for the publish driver and for the kit's own consistency |
 | [schedules/](schedules/) | Cron, launchd, and Hermes Agent job examples |
 | [data/](data/) | Real public PR outcomes, scorecard baseline, test-set seed |
+| [skills/](skills/) | The loop as an agent skill, for Claude Code and Hermes Agent |
 | [diagrams/](diagrams/) | Still, animation, Mermaid, animation source |
 
 ## Picking this up (for Brad's agent, or anyone new)
@@ -97,6 +98,20 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
 
 If Brad is the operator, "Brad" in these docs is still the merge decision, and "Austin" becomes
 whoever else is available as the human reviewer. Nothing here requires Austin's accounts.
+
+## Use it as an agent skill
+
+[`skills/roadmap-bugfix-loop/`](skills/roadmap-bugfix-loop/SKILL.md) is an
+[Agent Skills](https://agentskills.io/specification) skill that starts the loop correctly: it gets
+the kit, records its version, checks no other copy is running, starts the Coordinator watched by
+the Coach, and repeats the hard nevers. Everything else stays in this repo; the skill points here.
+
+| Runtime | Install |
+|---|---|
+| Claude Code | Copy or link `skills/roadmap-bugfix-loop/` into `~/.claude/skills/` (or a project's `.claude/skills/`) |
+| Hermes Agent | `hermes skills install robertaustinbell/roadmap-bugfix-process/skills/roadmap-bugfix-loop` |
+
+Then say "start the bug-fix loop". `scripts/check_kit.py` checks the skill against both formats.
 
 ## What transfers, and what has actually been run
 

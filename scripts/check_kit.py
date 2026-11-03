@@ -14,6 +14,10 @@ Checks every file git knows about (tracked, plus untracked files that are not ig
    HTML comments and code blocks. Moving a rule into a comment, a code block or another
    section fails, so a rule cannot be quietly disabled.
 5. Every agent template in agents/ is linked from at least one page, so none is orphaned.
+6. Every skill in skills/ is valid for both the Agent Skills standard (Claude and others) and
+   Hermes Agent: only standard frontmatter fields, a name that matches its folder, a
+   description of 60 characters or less, string-only metadata, no links that leave the skill
+   folder (it may be installed on its own), and a command named in it that exists in the kit.
 
 What it does not prove: that the rules are followed, that the docs are correct, or that
 nothing private is phrased in a way these patterns miss. A human still reviews each public change.
@@ -192,11 +196,92 @@ def check(root):
         elif n_all != 1:
             problems.append(f'{f}: rule "{phrase}" appears {n_all} times; keep one home for it')
 
+    problems += check_skills(root, files)
+
     linked = '\n'.join(mds.values())
     for f in files:
         if f.startswith('agents/') and f.endswith('.md') and os.path.basename(f) != 'README.md':
             if os.path.basename(f) not in linked.replace(f'# {os.path.basename(f)}', ''):
                 problems.append(f'{f}: no page links to this agent template')
+    return problems
+
+
+SKILL_FIELDS = {'name', 'description', 'license', 'compatibility', 'metadata', 'allowed-tools'}
+SKILL_NAME = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
+
+
+def frontmatter(text):
+    """Parse the small YAML subset skills use: top-level `key: value` and one level of
+    `  key: value` under a mapping key. Returns (dict, error)."""
+    if not text.startswith('---\n'):
+        return None, 'must start with --- on the first line'
+    end = text.find('\n---\n', 4)
+    if end < 0:
+        return None, 'frontmatter is not closed with ---'
+    if not text[end + 5:].strip():
+        return None, 'empty body'
+    fm, cur = {}, None
+    for line in text[4:end].split('\n'):
+        if not line.strip():
+            continue
+        m = re.match(r'^( {2})?([A-Za-z][\w-]*):(?: (.*))?$', line)
+        if not m:
+            return None, f'unparsed frontmatter line: {line[:40]}'
+        indent, key, val = m.groups()
+        val = (val or '').strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in '"\'':
+            val = val[1:-1]
+        elif val and val[0] in '[{':
+            return None, f'{key}: lists and inline maps are not plain strings'
+        if indent:
+            if cur is None:
+                return None, f'{key}: indented key without a parent'
+            fm[cur][key] = val
+        elif val:
+            fm[key], cur = val, None
+        else:
+            fm[key], cur = {}, key
+    return fm, None
+
+
+def check_skills(root, files):
+    problems = []
+    for f in files:
+        if not (f.startswith('skills/') and f.endswith('/SKILL.md')):
+            continue
+        folder = f.split('/')[-2]
+        with open(os.path.join(root, f), encoding='utf-8') as fh:
+            text = fh.read()
+        fm, err = frontmatter(text)
+        if err:
+            problems.append(f'{f}: {err}')
+            continue
+        extra = set(fm) - SKILL_FIELDS
+        if extra:
+            problems.append(f'{f}: fields outside the Agent Skills standard: {", ".join(sorted(extra))}')
+        name, desc = fm.get('name', ''), fm.get('description', '')
+        if not isinstance(name, str) or not SKILL_NAME.match(name) or len(name) > 64:
+            problems.append(f'{f}: name must be lowercase letters, digits and single hyphens, 64 or less')
+        elif name != folder:
+            problems.append(f'{f}: name "{name}" must match its folder "{folder}"')
+        if not isinstance(desc, str) or not desc or len(desc) > 60:
+            problems.append(f'{f}: description must be 1 to 60 characters (Hermes limit; standard allows 1024)')
+        comp = fm.get('compatibility', '')
+        if comp and (not isinstance(comp, str) or len(comp) > 500):
+            problems.append(f'{f}: compatibility must be a string of 500 characters or less')
+        meta = fm.get('metadata', {})
+        if not isinstance(meta, dict) or any(not isinstance(v, str) or not v for v in meta.values()):
+            problems.append(f'{f}: metadata must map keys to plain strings')
+        body = active(text)
+        for m in re.finditer(r'\]\(([^)#\s]+)', body):
+            dest = m.group(1)
+            if '://' in dest:
+                continue
+            if os.path.normpath(os.path.join(os.path.dirname(f), dest)).split(os.sep)[:2] != f.split('/')[:2]:
+                problems.append(f'{f}: link {dest} leaves the skill folder; name kit paths as text')
+        for script in set(re.findall(r'(scripts/[\w/]+\.py)', text)):
+            if script not in files:
+                problems.append(f'{f}: names {script}, which is not in the kit')
     return problems
 
 
