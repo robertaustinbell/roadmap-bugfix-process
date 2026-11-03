@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "candidate.schema.json",
+  "title": "Finder output: candidates from one finder in one round (process.md section 7)",
+  "description": "What a finder writes. Candidates are claims, not findings: the Decider confirms or refutes each one and writes a decision record in finding.schema.json. Extra fields are allowed.",
+  "type": "object",
+  "required": [
+    "finder",
+    "round",
+    "pinned_commit",
+    "coverage",
+    "candidates"
+  ],
+  "properties": {
+    "finder": {
+      "type": "string"
+    },
+    "round": {
+      "type": "string"
+    },
+    "pinned_commit": {
+      "type": "string",
+      "minLength": 7
+    },
+    "coverage": {
+      "type": "object",
+      "required": [
+        "scope",
+        "not_assessed"
+      ],
+      "properties": {
+        "scope": {
+          "type": "string"
+        },
+        "not_assessed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "locations",
+          "claim",
+          "trigger",
+          "expected",
+          "actual",
+          "smallest_test",
+          "severity_claimed",
+          "confidence",
+          "security_sensitive"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "locations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "path"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "bug_class": {
+            "type": "string"
+          },
+          "claim": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "expected": {
+            "type": "string"
+          },
+          "actual": {
+            "type": "string"
+          },
+          "trace": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "smallest_test": {
+            "type": "string"
+          },
+          "severity_claimed": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "unchecked": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "security_sensitive": {
+            "type": "boolean"
+          },
+          "known_overlap": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

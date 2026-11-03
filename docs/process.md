@@ -178,6 +178,18 @@ For each `fix` route the [Bug fixer](../agents/bug-fixer.md):
 
 There is no limit on the number of PRs for confirmed real bugs. One fix per PR.
 
+**Round integration check.** Each branch passing on its own is not enough: two fixes can
+each be green and break each other. Before the round's PRs open, merge all of the
+round's fix branches onto the pin in a throwaway worktree and run the full suite there
+(and any browser checks). A failure or a conflict goes back to the Bug fixer for the
+branches involved. Example from a trial: a security-header fix allowed one exact inline
+script by hash, and two menu fixes changed that script; each branch was green, the
+combined site would have blocked the menu.
+
+**Sequencing.** Do not run a structural clean-up (moving shared code, splitting files)
+in the same round as behaviour fixes that edit the same code. Fix first, then restructure
+on top, or the other way round; never in parallel.
+
 ### 3.6 Maintainer acts
 
 Brad merges, closes, reviews or comments. The loop does nothing to speed this up:
@@ -274,7 +286,12 @@ lands. The Coach never writes the rule into effect itself.
 
 ## 7. Common finding schema
 
-Every finder writes this shape. Extra fields are allowed; these are required.
+Every finder writes this shape ([candidate.schema.json](../templates/candidate.schema.json)). Extra
+fields are allowed; these are required.
+
+Two stages, two files. Finders write **candidates** (claims) in this shape. The Decider turns each
+candidate it keeps into a **decision record** in [finding.schema.json](../templates/finding.schema.json),
+which adds `status`, `route`, `evidence` and the contract. A finder never writes `status` or `route`.
 
 ```json
 {
@@ -373,6 +390,19 @@ The loop is defined by its files and rules, not by any one runtime.
   as the system or task prompt and fill the placeholders.
 - Hand-offs happen through files in `$STATE_DIR`. An agent that is killed can be
   restarted and resumes from its files.
+- **Expect agents to die mid-task.** In one trial, 15 of 16 fixer runs were cut off by
+  model-provider connection drops; nothing committed was lost. So: the Bug fixer commits
+  as soon as the failing test and fix pass, before running slow gates, and writes
+  `STATE.json` early. The Coordinator's resume step reads each fix's worktree (commits,
+  uncommitted diff, which gate files exist) and dispatches only the missing work. Prefer
+  re-running deterministic checks (build, suite, witness, merge) with a script over
+  re-dispatching a model.
+- **Repo profile.** The templates assume a TypeScript web app with Vitest and story
+  acceptance criteria. For a different repo, write a short profile first: language and test
+  runner, which gates apply (for example strict `tsc` is N/A without TypeScript; CRAP and
+  mutation are N/A for markup-only diffs), where expected behaviour is written down
+  (README, design doc, tests), and the risk rows that matter. A gate marked N/A needs a
+  one-line reason.
 - Long, mechanical steps (serial full-suite runs, pushing, read-back checks) are
   best done by a small deterministic script, not by a model.
 - One working setup (the operator's) uses Hermes Agent cron jobs: a no-model job for

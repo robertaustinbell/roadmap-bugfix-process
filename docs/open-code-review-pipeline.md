@@ -80,6 +80,12 @@ There is no hourly retry, and no job opens a round by itself. Only the Coordinat
 - Part lists go stale as `main` changes. The scanner skips listed files that no longer exist and marks a part done if none remain. New files that belong to no part are only found by diffing `ocr scan --preview` against the part lists; do that every few rounds.
 - A session with zero finished files cannot be resumed. The script deletes it so the part starts fresh.
 - Use `--timeout 0` for whole-part scans. The default run budget silently truncates them.
+- Do not wrap scans in the GNU `timeout` command: stock macOS does not ship it, and the
+  scan fails before it starts. Bound run time inside the script instead.
+- Any model backend works (a subscription sign-in, an API key, or a local bridge). When
+  the usage limit is hit, every file in the batch fails with the provider's limit error; treat
+  that as "usage ran out", end the finder's turn for the round, and keep the session for a
+  later resume.
 - Keep OCR's plan, dedup and summary passes on; they are where its depth comes from.
 
 ### Model and usage

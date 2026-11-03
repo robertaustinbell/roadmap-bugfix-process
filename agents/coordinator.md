@@ -65,6 +65,10 @@ For private reports include only the ID and the affected paths, never the conten
 
 ## Steps
 
+0. **Resume first.** If a previous run of any agent in this round stopped without its
+   handoff, inspect its worktree and state files and dispatch only what is missing (see
+   [implementation notes](../docs/process.md#10-implementation-notes)). Before PRs open, run
+   the round integration check from [process.md section 3.5](../docs/process.md#35-fix).
 1. **Check the start gate.** For every PR in the previous round's `prs_opened`, read
    its timeline. It is addressed if the maintainer merged it, closed it, submitted a
    review, or commented asking for a fix. CI, bot comments, the loop's own comments,

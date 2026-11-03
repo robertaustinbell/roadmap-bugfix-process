@@ -49,6 +49,11 @@ Folder `$STATE_DIR/rounds/$ROUND/fixes/<slug>/`:
 
 ## Steps (new fix)
 
+Commit as soon as the failing test passes with the fix, before the slow gates, and write
+`STATE.json` with the head SHA. If this run is cut off, the next one resumes from the
+commit instead of starting over. Tests copied from the witness must resolve paths from
+their new location in the repo.
+
 1. **Fresh worktree** on current `upstream/main`, detached, with its own clean
    dependency install (`npm ci --ignore-scripts`; never symlink `node_modules`). Use
    CI's Node version and `TZ=UTC`.
