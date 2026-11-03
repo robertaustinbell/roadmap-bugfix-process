@@ -131,6 +131,13 @@ After round 1, the reviewer reviews only the new changes:
 - The verdict is a **local file** in the fix folder, validated against
   [review-verdict.schema.json](../templates/review-verdict.schema.json). The driver
   reads it from there.
+- **The review covers the text too.** Record `text_sha256`: the sha256 of the exact
+  `pr-title.txt` and `pr-body.md` (for repairs: `comment.md`, and `body.md` / `title.txt`
+  if present) you reviewed. The publisher refuses if any file it posts is missing
+  from that list or has changed. `approve` also needs all five required checks
+  (`red_at_base`, `green_at_head`, `protected_tests_untouched`,
+  `claims_match_assertions`, `single_fix_scope`) to be `yes`; `not_checked` is not
+  an approval.
 - **Never post a `VERDICT:` line on GitHub.** The upstream `auto-ship.yml`
   workflow accepts `VERDICT: APPROVE <sha>` from certain bot accounts and can act on
   it. Any GitHub comment the loop posts must not contain the string `VERDICT:`

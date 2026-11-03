@@ -5,7 +5,11 @@ The fill-in template is [templates/pr-body.md](../templates/pr-body.md). This pa
 explains each section.
 
 Three sections are required: **Testing**, **Risk** and **How to revert**. The
-publisher refuses a body without them.
+publisher refuses a body unless each appears exactly once as a `##` heading
+outside comments and code blocks, with text under it, and no `<placeholder>`
+from the template is left in the prose. The reviewer reviews the text as well as
+the code: the review records a digest of the body, and editing it afterwards
+needs a new review.
 
 ## Rules for the whole body
 

@@ -182,6 +182,26 @@
     },
     "decision_question": {
       "type": "string"
+    },
+    "text_sha256": {
+      "description": "sha256 (hex) of the exact bytes of every file the publisher will post, taken when the review was written. The publisher refuses if any posted file is missing here or has changed since. Review the text, not only the code.",
+      "type": "object",
+      "additionalProperties": false,
+      "propertyNames": {
+        "enum": [
+          "pr-title.txt",
+          "pr-body.md",
+          "comment.md",
+          "body.md",
+          "title.txt"
+        ]
+      },
+      "patternProperties": {
+        ".*": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
     }
   },
   "allOf": [
@@ -261,8 +281,31 @@
           },
           "still_open": {
             "maxItems": 0
+          },
+          "checks": {
+            "description": "Approve needs every required check to be yes. not_checked or not_applicable on any of these is not an approval.",
+            "properties": {
+              "red_at_base": {
+                "const": "yes"
+              },
+              "green_at_head": {
+                "const": "yes"
+              },
+              "protected_tests_untouched": {
+                "const": "yes"
+              },
+              "claims_match_assertions": {
+                "const": "yes"
+              },
+              "single_fix_scope": {
+                "const": "yes"
+              }
+            }
           }
-        }
+        },
+        "required": [
+          "text_sha256"
+        ]
       }
     },
     {

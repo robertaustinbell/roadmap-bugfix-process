@@ -109,8 +109,10 @@ from the summary below, that template governs. Summary:
 The reviewer reads the decision, the witness, `fix.patch` and `pr-body.md`, and
 writes `review-<k>.json` (local file only, never posted), valid against
 [templates/review-verdict.schema.json](../templates/review-verdict.schema.json): `verdict`
-(`approve` or `changes`), the full `head` SHA reviewed, and findings (severity, file:line,
-what, why, suggested fix).
+(`approve` or `changes`), the full `head` SHA reviewed, findings (severity, file:line,
+what, why, suggested fix), and `text_sha256` of the title and body it reviewed. Do not
+edit `pr-title.txt` or `pr-body.md` after the review: the publisher compares their
+digests and refuses.
 
 It checks that:
 
@@ -135,7 +137,7 @@ Details: [publishing.md](../docs/publishing.md). A deterministic script is prefe
 
 1. no stop file exists (`HOLD.md`, `DECISION-NEEDED.md`, `NOT-REPRODUCED.md`,
    `HELD-FOR-HUMAN.md`);
-2. the latest `review-<k>.json` has verdict `approve` and `head` equal to the worktree head;
+2. the latest `review-<k>.json` approves the worktree head (full SHA, the five required checks `yes`) and its `text_sha256` matches the title and body;
 3. `gates.md`'s last section names that head with every gate passed;
 4. the full suite ran at that head and matches the baseline;
 5. the head merges cleanly with current `upstream/main`, and `main` has not already

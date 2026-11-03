@@ -1,6 +1,6 @@
 # Publish driver
 
-Sanitized from a working implementation; review before running. `driver.py` needs Python 3, `git`, an authenticated `gh`, `node` with the repo's dependencies installed in each fix worktree, and `gitleaks`. It passes `python3 -m py_compile`.
+Sanitized from a working implementation; review before running. `driver.py` needs Python 3, `git`, an authenticated `gh`, `node` with the repo's dependencies installed in each fix worktree, and `gitleaks`. Its tests are in [`tests/`](../../tests/).
 
 What it does and why: [docs/publishing.md](../../docs/publishing.md).
 
@@ -45,9 +45,15 @@ Stop the loop: `touch /path/to/round/stop-driver`. It finishes the current item 
 
 ## Folder contract
 
-New PR folder: `STATE.json`, `review-<k>.json` (verdict `approve`, `head` = the SHA; see `templates/review-verdict.schema.json`), `pr-title.txt`, `pr-body.md`; optional `WAIT-FOR`, `HOLD.md`, `NOT-REPRODUCED.md`. The driver adds `suite.json`, `suite-head.txt`, `suite.log`, `rerun-*.log`, `push-dry.log`, `push-go.log`, and `PUSH-REFUSED.md` on refusal. Ledger: `published.jsonl` in the fixes folder.
+New PR folder: `STATE.json`, `review-<k>.json` (an approval per `templates/review-verdict.schema.json`: full `head`, all five required checks `yes`, and `text_sha256` of `pr-title.txt` and `pr-body.md`), `pr-title.txt`, `pr-body.md`; optional `WAIT-FOR`, `HOLD.md`, `NOT-REPRODUCED.md`. The driver adds `suite.json`, `suite-head.txt`, `suite.log`, `rerun-*.log`, `push-dry.log`, `push-go.log`, and `PUSH-REFUSED.md` on refusal. Ledger: `published.jsonl` in the fixes folder.
 
-Repair folder `pr<N>/`: the same plus `meta.json` (`head_at_start`, `addressed_comment_at`), `comment.md`, optional `body.md` and `title.txt`. Ledger: `pushed.jsonl` in the round folder.
+Repair folder `pr<N>/`: the same plus `meta.json` (`head_at_start`, `addressed_comment_at`), `comment.md`, optional `body.md` and `title.txt`; the review's `text_sha256` covers each of those that exists. Ledger: `pushed.jsonl` in the round folder.
+
+Ledger records carry `status`: `attempted` (written before the first GitHub call), then `observed_succeeded` or `observed_failed`. Records from before this field existed are read by their `verified` flag.
+
+## Tests
+
+`python3 -m unittest discover -s tests` and `python3 scripts/mutation_check.py` from the repo root. Both are standard library only and use a fake `gh`; they never touch GitHub.
 
 ## Changes from the working version
 
@@ -55,5 +61,6 @@ Repair folder `pr<N>/`: the same plus `meta.json` (`head_at_start`, `addressed_c
 - Hardcoded paths, the fork account and the sign-off check are configuration.
 - A missing gitleaks now refuses with a clear message instead of crashing.
 - Added: the `VERDICT:` refusal, a lock and pid file per round folder, and the `addressed` check.
+- Added later: a strict approval check, text digests, untracked-file and dropped-commit refusals, PR body section checks, attempted-before-write ledger records with adoption on rerun, a secret-free suite environment, and tests with a gate-removal check.
 - `repair` defaults to fast-forward pushes. The working version used `--force-with-lease` on amended commits; the later rule for repairs is "fast-forward, never force push". Decide which you want before using `ALLOW_FORCE_WITH_LEASE`.
 - A dependency check that made a body wait for another PR's repair push (`WAIT-FOR-PUSH`) was dropped as rarely used. Hold such a folder with `HOLD.md` instead.

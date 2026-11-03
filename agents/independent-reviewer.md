@@ -36,6 +36,9 @@ Do not read the fixer's notes, transcript or reasoning, even if present.
 One file: `review-<round>.json`, valid against
 [review-verdict.schema.json](../templates/review-verdict.schema.json).
 
+Compute each `text_sha256` value from the file as it is on disk when you finish, for example
+`shasum -a 256 pr-body.md`. You never edit these files; the digest says which text you approved.
+
 ```json
 {
   "fix_id": "<fix_id>",
@@ -53,6 +56,7 @@ One file: `review-<round>.json`, valid against
     "risk_label_correct": "yes", "no_owner_decision_made": "yes",
     "reverted_changes_detected": [{ "change": "<file:line, short>", "failing_tests": 2 }]
   },
+  "text_sha256": { "pr-title.txt": "<64-hex>", "pr-body.md": "<64-hex>" },
   "findings": [
     {
       "id": "R1-1",

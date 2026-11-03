@@ -45,8 +45,8 @@ Take inventory with code, not from memory.
 a. **Triage gaps.** A group whose `<group>-verdicts.json` is missing or covers fewer ids than its comments file: send its triage worker again with "resume from `<group>-NOTES.md` and the existing verdicts file".
 
 b. **Fix folders.** For each `F/ocrNN-*/` with `READY-FOR-REVIEW`:
-   - No `review*.md`, or the latest review's `HEAD:` is not the `STATE.json` head: start an independent reviewer (a fresh sub-agent that did not write the fix) per [docs/independent-review.md](../docs/independent-review.md). It writes the next `review<N>.md`. Up to 4 folders per reviewer, one after another.
-   - Latest review `CHANGES`, wording only, head unchanged: fix `pr-body.md` yourself and write the next `review<N>.md` with line 1 `VERDICT: APPROVE`, line 2 `HEAD: <same head>`, and a note of what you changed.
+   - No `review-*.json`, or the latest review's `head` is not the `STATE.json` head: start an independent reviewer (a fresh sub-agent that did not write the fix) per [docs/independent-review.md](../docs/independent-review.md). It writes the next `review-<k>.json` ([schema](../templates/review-verdict.schema.json)). Up to 4 folders per reviewer, one after another.
+   - Latest review `changes`, wording only, head unchanged: fix `pr-body.md` yourself and write the next `review-<k>.json` with `reviewer.role` `orchestrator_close`, the previous review's checks unchanged, `verdict` `approve`, the same `head`, a `summary` of exactly what you changed, and `text_sha256` of the new `pr-title.txt` and `pr-body.md`. Never change a claim, a number or the Risk label this way; that needs the reviewer again.
    - Latest review `CHANGES` otherwise: start a repair worker (fix per the review, RED then GREEN, gates, mutants, amend the single commit, update `fix.patch`, write `STATE.json` last with `previous_head`, write `repair-notes.md`; it writes no review files). After round 1, the next review checks only the new diff.
    - After 3 `CHANGES` rounds on one folder: write `HOLD.md` ("three review rounds without approval") and notify.
    - `APPROVE` on the current head: nothing to do; the driver publishes.

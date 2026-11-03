@@ -12,11 +12,21 @@ Subcommands:
                                                 maintainer action? exit 0 = all addressed, 1 = not yet
 
 What the loop publishes:
-- New PRs: each folder under --fixes-dir with STATE.json, whose highest-numbered review-<k>.json has
-  verdict "approve" and "head" matching STATE.json "head", with no HOLD.md, PUSH-REFUSED.md
-  or NOT-REPRODUCED.md, not already in <fixes-dir>/published.jsonl, and every PR number in WAIT-FOR MERGED.
+- New PRs: each folder under --fixes-dir with STATE.json, whose highest-numbered review-<k>.json
+  approves STATE.json "head" (see "Approval" below), with no HOLD.md, PUSH-REFUSED.md or
+  NOT-REPRODUCED.md, not already final in <fixes-dir>/published.jsonl, and every PR number in WAIT-FOR MERGED.
 - Repairs: each <round-dir>/pr<N>/ folder with STATE.json, meta.json and comment.md, the same review
-  rule, not already in <round-dir>/pushed.jsonl.
+  rule, not already final in <round-dir>/pushed.jsonl.
+
+Approval (templates/review-verdict.schema.json): the file parses strictly (duplicate keys refused),
+has no unknown fields, verdict "approve", "head" equal to the full 40-character head, the five
+required checks all "yes", no blocking finding, nothing still open, and a text_sha256 entry matching
+every file the driver will post. Editing a title, body or comment after review voids the approval.
+
+Ledgers record each external effect as "attempted" before the first GitHub write, then
+"observed_succeeded" or "observed_failed" after read-back. A rerun that finds an unfinished attempt
+looks for the PR on GitHub and adopts it instead of opening a second one. Only observed_succeeded
+counts as published.
 
 For each ready folder, in order: textual merge pre-check against current upstream main; full suite once,
 serially, load-gated; real failures are rerun alone (still failing = refuse; passing alone = rerun the
@@ -48,6 +58,7 @@ Configuration (env vars):
 import datetime
 import fcntl
 import glob
+import hashlib
 import json
 import os
 import re
@@ -56,6 +67,7 @@ import shutil
 import subprocess as sp
 import sys
 import time
+import unicodedata
 
 UP = os.environ.get('UPSTREAM_REPO', 'DrBradStanfield/roadmap')
 FORK_OWNER = os.environ.get('GH_FORK_OWNER', '')
@@ -71,15 +83,44 @@ MAX_WORKERS = os.environ.get('SUITE_MAX_WORKERS', '4')
 GITLEAKS = os.environ.get('GITLEAKS_BIN', 'gitleaks')
 _ka = os.environ.get('KEEP_AWAKE')
 KEEP_AWAKE = shlex.split(_ka) if _ka is not None else (['caffeinate', '-ims'] if shutil.which('caffeinate') else [])
-_path = [p for p in (os.environ.get('NODE_BIN_DIR'), os.environ.get('EXTRA_PATH')) if p]
-ENV = dict(os.environ, PATH=':'.join(_path + [os.environ.get('PATH', '')]), TZ='UTC', CI='1')
+SECRET_NAME = re.compile(r'TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|PRIVATE_KEY|CREDENTIAL|^GH_|^GITHUB_|^AWS_', re.I)
+
+
+def suite_env(base):
+    """Environment for the target repo's test suite. The suite runs code from the repo under review,
+    so it gets no push token, API key or other secret from our environment."""
+    _path = [p for p in (base.get('NODE_BIN_DIR'), base.get('EXTRA_PATH')) if p]
+    env = {k: v for k, v in base.items() if not SECRET_NAME.search(k)}
+    env.update(PATH=':'.join(_path + [base.get('PATH', '')]), TZ='UTC', CI='1')
+    return env
+
+
+ENV = suite_env(os.environ)
 VITEST = ['node', 'node_modules/vitest/vitest.mjs', 'run']
 SELF = os.path.abspath(__file__)
+TEMPLATES = os.path.join(os.path.dirname(SELF), '..', '..', 'templates')
+
+SHA40 = re.compile(r'[0-9a-f]{40}')
+VERDICTS = ('approve', 'changes', 'needs_decision', 'could_not_review')
+CHECK_STATES = ('yes', 'no', 'not_checked', 'not_applicable')
+APPROVE_NEEDS_YES = ('red_at_base', 'green_at_head', 'protected_tests_untouched', 'claims_match_assertions',
+                     'single_fix_scope')
+FRESH_ROLES = ('independent_reviewer', 'delta_reviewer')
+POST_FILES_NEW = ('pr-title.txt', 'pr-body.md')
+POST_FILES_REPAIR = ('comment.md', 'body.md', 'title.txt')
+REQUIRED_SECTIONS = ('Testing', 'Risk', 'How to revert')
+FINAL = ('observed_succeeded', 'observed_failed')
 
 
 # ---------------------------------------------------------------------------------------------
 # shared checks
 # ---------------------------------------------------------------------------------------------
+
+def need(ok, msg):
+    """A gate. Not `assert`: python -O strips asserts, and a gate must never vanish."""
+    if not ok:
+        sys.exit(f'REFUSED: {msg}')
+
 
 def run(args, cwd=None, check=True):
     """Every git/gh call is an argv list, never a shell string."""
@@ -89,26 +130,178 @@ def run(args, cwd=None, check=True):
     return r.stdout.strip()
 
 
+def _no_dupes(pairs):
+    d = {}
+    for k, v in pairs:
+        if k in d:
+            raise ValueError(f'duplicate key {k!r}')
+        d[k] = v
+    return d
+
+
+def _no_constant(c):
+    raise ValueError(f'non-finite number {c}')
+
+
+def strict_load(path):
+    """JSON that gates an action: duplicate keys (at any depth) and NaN/Infinity are errors, not last-wins."""
+    with open(path, encoding='utf-8') as f:
+        return json.load(f, object_pairs_hook=_no_dupes, parse_constant=_no_constant)
+
+
+def sha256_file(path):
+    with open(path, 'rb') as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
 def latest_review(d):
     revs = sorted(glob.glob(f'{d}/review-*.json'), key=lambda p: int(re.sub(r'\D', '', os.path.basename(p)) or 0))
     return revs[-1] if revs else None
 
 
-def review_approves(d, head):
-    """Latest local review-<k>.json (templates/review-verdict.schema.json): verdict 'approve' on this head."""
+def _unknown(obj, allowed, where):
+    extra = sorted(set(obj) - set(allowed))
+    return [f'unknown fields in {where}: {extra}'] if extra else []
+
+
+def verdict_problems(r, head):
+    """Every reason this verdict does not approve `head`. An empty list means it approves."""
+    s = strict_load(os.path.join(TEMPLATES, 'review-verdict.schema.json'))
+    if not isinstance(r, dict):
+        return ['verdict file is not a JSON object']
+    p = _unknown(r, s['properties'], 'verdict')
+    missing = sorted(set(s['required']) - set(r))
+    if missing:
+        p.append(f'missing fields: {missing}')
+    if r.get('verdict') != 'approve':
+        p.append(f"verdict is {r.get('verdict')!r}, not 'approve'")
+    h = r.get('head')
+    if not (isinstance(h, str) and SHA40.fullmatch(h)):
+        p.append('head is not a full 40-character SHA')
+    elif h != head:
+        p.append(f'review is for {h[:12]}, folder head is {head[:12]}')
+    if not (isinstance(r.get('base'), str) and SHA40.fullmatch(r['base'])):
+        p.append('base is not a full 40-character SHA')
+    rv = r.get('reviewer')
+    if not isinstance(rv, dict):
+        p.append('reviewer is missing')
+    else:
+        p += _unknown(rv, s['properties']['reviewer']['properties'], 'reviewer')
+        if rv.get('wrote_fix') is not False:
+            p.append('reviewer.wrote_fix is not false')
+        if rv.get('role') not in s['properties']['reviewer']['properties']['role']['enum']:
+            p.append(f"reviewer.role {rv.get('role')!r} is not a known role")
+        elif rv.get('role') in FRESH_ROLES and rv.get('fresh_context') is not True:
+            p.append('an independent or delta reviewer must have fresh_context true')
+    c = r.get('checks')
+    if not isinstance(c, dict):
+        p.append('checks is missing')
+    else:
+        p += _unknown(c, s['properties']['checks']['properties'], 'checks')
+        for k in APPROVE_NEEDS_YES:
+            if c.get(k) != 'yes':
+                p.append(f'checks.{k} is {c.get(k)!r}; approve needs "yes"')
+    f = r.get('findings')
+    if not isinstance(f, list):
+        p.append('findings is not a list')
+    else:
+        for x in f:
+            cls = x.get('class') if isinstance(x, dict) else None
+            if cls not in ('nit', 'pre_existing') and not (cls == 'should_fix' and x.get('optional') is True):
+                p.append(f"finding {x.get('id') if isinstance(x, dict) else x!r} ({cls}) blocks approve")
+    if r.get('still_open'):
+        p.append(f"still_open is not empty: {r['still_open']}")
+    return p
+
+
+def review_problems(d, head, files=()):
+    """Latest local review-<k>.json must approve this head and the exact bytes of every file to be posted."""
     rv = latest_review(d)
     if not rv:
-        return False
+        return ['no review-<k>.json']
     try:
-        r = json.load(open(rv))
-    except (OSError, ValueError):
-        return False
-    h = str(r.get('head', ''))
-    return r.get('verdict') == 'approve' and len(h) >= 7 and head.startswith(h)
+        r = strict_load(rv)
+    except (OSError, ValueError) as e:
+        return [f'{os.path.basename(rv)} does not parse strictly: {e}']
+    p = verdict_problems(r, head)
+    dig = r.get('text_sha256') if isinstance(r, dict) else None
+    for name in files:
+        fp = os.path.join(d, name)
+        if os.path.exists(fp) and not (isinstance(dig, dict) and dig.get(name) == sha256_file(fp)):
+            p.append(f'{name} changed after review (or text_sha256 has no matching entry)')
+    return p
+
+
+def review_approves(d, head, files=()):
+    return not review_problems(d, head, files)
+
+
+ZERO_WIDTH = dict.fromkeys(map(ord, '\u200b\u200c\u200d\u2060\ufeff\u00ad'), None)
+VERDICT_RE = re.compile(r'verdict\s*:', re.I)
 
 
 def no_verdict_token(text, what):
-    assert 'verdict:' not in text.lower(), f'{what} contains "VERDICT:"; never post that token to GitHub'
+    """Normalize first (full-width letters and colons, zero-width joins), then look for the token."""
+    t = unicodedata.normalize('NFKC', text).translate(ZERO_WIDTH)
+    need(not VERDICT_RE.search(t), f'{what} contains "VERDICT:" (or a disguised form); never post that token to GitHub')
+
+
+ARTIFACT_RE = re.compile(
+    r'\[(?:output )?truncated|<truncated>|\b(?:bytes|lines|chars|characters|tokens) omitted\b'
+    r'|^(?:<{7}|>{7})(?:\s|$)|^={7}\s*$', re.I | re.M)
+
+
+def artifact_problems(text, what):
+    """Transport artifacts (tool truncation markers) and merge conflict markers that parse fine but are corrupt."""
+    hits = sorted({m.group(0).strip() for m in ARTIFACT_RE.finditer(text)})
+    return [f'{what} contains a truncation or conflict marker: {hits}'] if hits else []
+
+
+HTML_TAGS = {'a', 'b', 'br', 'code', 'details', 'div', 'em', 'hr', 'i', 'img', 'kbd', 'li', 'ol', 'p', 'pre',
+             'span', 'strong', 'sub', 'summary', 'sup', 'table', 'td', 'th', 'tr', 'ul'}
+
+
+def active_markdown(md):
+    """Markdown with HTML comments and fenced code removed. An unclosed fence drops the rest (fails closed)."""
+    md = re.sub(r'<!--.*?(?:-->|\Z)', '', md, flags=re.S)
+    out, fence = [], None
+    for ln in md.split('\n'):
+        m = re.match(r' {0,3}(`{3,}|~{3,})', ln)
+        if fence:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and ln.strip() == m.group(1):
+                fence = None
+            continue
+        if m:
+            fence = m.group(1)
+            continue
+        out.append(ln)
+    return '\n'.join(out)
+
+
+def body_problems(body):
+    """The PR body needs exactly one filled-in Testing, Risk and How to revert section, and no template text."""
+    a = active_markdown(body)
+    secs, cur = [], None
+    for ln in a.split('\n'):
+        m = re.match(r'##\s+(.+?)\s*#*\s*$', ln)
+        if m and not ln.startswith('###'):
+            cur = [m.group(1), '']
+            secs.append(cur)
+        elif cur is not None:
+            cur[1] += ln + '\n'
+    p = []
+    for name in REQUIRED_SECTIONS:
+        hits = [b for h, b in secs if h.lower() == name.lower()]
+        if len(hits) != 1:
+            p.append(f'needs exactly one "## {name}" section outside comments and code, found {len(hits)}')
+        elif not re.search(r'\w', hits[0]):
+            p.append(f'"## {name}" has no text')
+    prose = re.sub(r'`[^`\n]*`', '', a)
+    holes = [m for m in re.findall(r'</?([A-Za-z][^<>\n]*)>', prose) if m.split()[0].lower().rstrip('/') not in HTML_TAGS]
+    holes += re.findall(r'`(<[^`\n]*>)`', a)
+    if holes:
+        p.append(f'unfilled template placeholders: {sorted(set(holes))[:5]}')
+    return p
 
 
 def gitleaks_ok(wt):
@@ -122,8 +315,9 @@ def gitleaks_ok(wt):
 
 def suite_ok_at_head(d, wt, head):
     """suite.json at head; failures only in KNOWN files, each with a passing solo rerun log at head."""
-    assert open(f'{d}/suite-head.txt').read().strip() == head, 'suite not at head'
-    sj = json.load(open(f'{d}/suite.json'))
+    need(open(f'{d}/suite-head.txt').read().strip() == head, 'suite not at head')
+    sj = strict_load(f'{d}/suite.json')
+    need(isinstance(sj.get('testResults'), list) and sj['testResults'], 'suite.json has no test results')
     bad = []
     for f in sj['testResults']:
         if f['status'] == 'passed':
@@ -134,24 +328,86 @@ def suite_ok_at_head(d, wt, head):
               and re.search(r'Tests\s+(\d+) passed \(\1\)', open(lg).read()))
         if not ok:
             bad.append(rel)
-    assert not bad, f'suite failures: {bad}'
+    need(not bad, f'suite failures: {bad}')
 
 
 def clean_worktree_at(wt, head):
-    assert run(['git', 'rev-parse', 'HEAD'], wt) == head, 'worktree HEAD != STATE head'
-    assert run(['git', 'status', '--porcelain', '--untracked-files=no'], wt) == '', 'worktree dirty'
+    """HEAD is the reviewed head and nothing else is in the tree. Untracked files count: a suite that
+    passes only because of a local file that was never committed did not test the pushed commit."""
+    need(run(['git', 'rev-parse', 'HEAD'], wt) == head, 'worktree HEAD != STATE head')
+    st = run(['git', 'status', '--porcelain', '--untracked-files=all'], wt)
+    need(st == '', f'worktree has uncommitted or untracked files:\n{st[:1500]}')
 
 
 def merges_clean(wt, head):
     run(['git', 'fetch', '-q', UP_REMOTE, 'main'], wt)
     mt = sp.run(['git', 'merge-tree', '--write-tree', f'{UP_REMOTE}/main', head], cwd=wt, capture_output=True, text=True)
-    assert mt.returncode == 0, f'conflicts with current {UP_REMOTE}/main:\n{mt.stdout[-1500:]}'
+    need(mt.returncode == 0, f'conflicts with current {UP_REMOTE}/main:\n{mt.stdout[-1500:]}')
+
+
+def fix_commits_present(wt, head):
+    """A rebase can silently drop the fix commits; pushing that empty branch closes the PR.
+    Also refuses conflict and truncation markers in the lines the fix adds. Call after merges_clean."""
+    base = run(['git', 'merge-base', f'{UP_REMOTE}/main', head], wt)
+    ahead = int(run(['git', 'rev-list', '--count', f'{base}..{head}'], wt))
+    diff = run(['git', 'diff', '--no-ext-diff', '--no-textconv', '--unified=0', base, head], wt)
+    need(ahead > 0 and diff, f'no fix commits above {UP_REMOTE}/main (a rebase may have dropped them); '
+         'restore the previous tip from the reflog instead of pushing')
+    added = '\n'.join(ln[1:] for ln in diff.split('\n') if ln.startswith('+') and not ln.startswith('+++'))
+    p = artifact_problems(added, 'the diff')
+    need(not p, '; '.join(p))
+
+
+def ledger_records(path, key, value):
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        return [r for r in (json.loads(ln) for ln in f if ln.strip()) if r.get(key) == value]
+
+
+def ledger_status(path, key, value):
+    """Last effect state for this key. Records written before states existed count by their verified flag."""
+    recs = ledger_records(path, key, value)
+    if not recs:
+        return None
+    r = recs[-1]
+    return r.get('status') or ('observed_succeeded' if r.get('verified') else 'observed_failed')
 
 
 def ledger_has(path, key, value):
-    if not os.path.exists(path):
-        return False
-    return any(json.loads(ln).get(key) == value for ln in open(path) if ln.strip())
+    """True once the effect reached a final observed state. An 'attempted' record is not final."""
+    return ledger_status(path, key, value) in FINAL
+
+
+def ledger_append(path, rec):
+    rec = dict(rec, at=datetime.datetime.now().isoformat(timespec='seconds'))
+    with open(path, 'a') as f:
+        f.write(json.dumps(rec) + '\n')
+        f.flush()
+        os.fsync(f.fileno())
+    return rec
+
+
+def text_checks(texts, attributed):
+    """Every title, body and comment the driver is about to post. `attributed` names the texts that
+    must carry the ATTRIBUTION line."""
+    for what, t in texts.items():
+        if t is None:
+            continue
+        if ATTRIBUTION and what in attributed:
+            need(ATTRIBUTION in t, f'{what} lacks the ATTRIBUTION line')
+        no_verdict_token(t, what)
+        p = artifact_problems(t, what)
+        need(not p, '; '.join(p))
+
+
+def existing_pr(branch):
+    """Read-only: a PR from our fork's branch that already exists on GitHub (open, closed or merged)."""
+    out = run(['gh', 'pr', 'list', '--repo', UP, '--head', branch, '--state', 'all', '--json',
+               'number,url,headRefOid,state,headRepositoryOwner'])
+    hits = [p for p in json.loads(out or '[]') if (p.get('headRepositoryOwner') or {}).get('login') == FORK_OWNER]
+    need(len(hits) <= 1, f'{len(hits)} PRs already exist for {branch}; reconcile by hand')
+    return hits[0] if hits else None
 
 
 # ---------------------------------------------------------------------------------------------
@@ -161,39 +417,47 @@ def ledger_has(path, key, value):
 def publish(folder, go):
     F = os.path.abspath(folder)
     ledger = os.path.join(os.path.dirname(F), 'published.jsonl')
-    st = json.load(open(f'{F}/STATE.json'))
+    st = strict_load(f'{F}/STATE.json')
     wt, branch, head = st['worktree'], st['branch'], st['head']
-    if ledger_has(ledger, 'branch', branch):
-        sys.exit('already published')
-    assert FORK_OWNER, 'set GH_FORK_OWNER'
+    need(not ledger_has(ledger, 'branch', branch), 'already published (final record in published.jsonl)')
+    need(FORK_OWNER, 'set GH_FORK_OWNER')
     clean_worktree_at(wt, head)
-    assert review_approves(F, head), 'latest review not APPROVE on head'
+    p = review_problems(F, head, POST_FILES_NEW)
+    need(not p, 'latest review does not approve this head and text: ' + '; '.join(p))
     suite_ok_at_head(F, wt, head)
     merges_clean(wt, head)
-    assert gitleaks_ok(wt), 'gitleaks (the CI secret scan) flags this tree'
+    fix_commits_present(wt, head)
+    need(gitleaks_ok(wt), 'gitleaks (the CI secret scan) flags this tree')
     title = open(f'{F}/pr-title.txt').read().strip()
     body = open(f'{F}/pr-body.md').read()
-    assert 0 < len(title) < 200, 'title missing or too long'
-    if ATTRIBUTION:
-        assert ATTRIBUTION in body, 'PR body lacks the ATTRIBUTION line'
-    no_verdict_token(title + '\n' + body, 'PR title/body')
-    print(f'{branch} @{head[:8]}: {title}')
+    need(0 < len(title) < 200, 'title missing or too long')
+    p = body_problems(body)
+    need(not p, 'PR body: ' + '; '.join(p))
+    text_checks({'title': title, 'body': body}, attributed=('body',))
+    prior = existing_pr(branch)  # an earlier run may have opened it and died before the ledger write
+    if prior:
+        need(prior['state'] == 'OPEN' and prior['headRefOid'] == head,
+             f"PR #{prior['number']} already exists for {branch} ({prior['state']}, head "
+             f"{prior['headRefOid'][:8]}); reconcile by hand")
+    print(f'{branch} @{head[:8]}: {title}' + (f" (adopts existing PR #{prior['number']})" if prior else ''))
     if not go:
         return
-    run(['git', 'push', PUSH_REMOTE, f'{head}:refs/heads/{branch}'], wt)
-    url = run(['gh', 'pr', 'create', '--repo', UP, '--base', 'main', '--head', f'{FORK_OWNER}:{branch}',
-               '--title', title, '--body-file', f'{F}/pr-body.md'])
+    rec = dict(folder=os.path.basename(F), branch=branch, head=head, effect='open_pr')
+    ledger_append(ledger, dict(rec, status='attempted'))
+    if prior:
+        url = prior['url']
+    else:
+        run(['git', 'push', PUSH_REMOTE, f'{head}:refs/heads/{branch}'], wt)
+        url = run(['gh', 'pr', 'create', '--repo', UP, '--base', 'main', '--head', f'{FORK_OWNER}:{branch}',
+                   '--title', title, '--body-file', f'{F}/pr-body.md'])
     v = json.loads(run(['gh', 'pr', 'view', url, '--json',
                         'number,url,author,baseRefName,headRefOid,isDraft,title,body,state']))
     ok = (v['author']['login'] == FORK_OWNER and v['baseRefName'] == 'main' and v['headRefOid'] == head
           and not v['isDraft'] and v['title'] == title and v['body'].strip() == body.strip() and v['state'] == 'OPEN')
-    rec = dict(folder=os.path.basename(F), branch=branch, number=v['number'], url=v['url'], head=head,
-               verified=ok, at=datetime.datetime.now().isoformat(timespec='seconds'))
-    with open(ledger, 'a') as f:
-        f.write(json.dumps(rec) + '\n')
+    rec = ledger_append(ledger, dict(rec, number=v['number'], url=v['url'], verified=ok, adopted=bool(prior),
+                                     status='observed_succeeded' if ok else 'observed_failed'))
     print('PUBLISHED', json.dumps(rec))
-    if not ok:
-        sys.exit('READBACK MISMATCH')
+    need(ok, 'READBACK MISMATCH')
 
 
 # ---------------------------------------------------------------------------------------------
@@ -204,34 +468,44 @@ def repair(folder, go):
     d = os.path.abspath(folder)
     R = os.path.dirname(d)
     n = re.sub(r'\D', '', os.path.basename(d))
-    meta = json.load(open(f'{d}/meta.json'))  # {"head_at_start": sha, "addressed_comment_at": iso time}
-    st = json.load(open(f'{d}/STATE.json'))
+    led = f'{R}/pushed.jsonl'
+    meta = strict_load(f'{d}/meta.json')  # {"head_at_start": sha, "addressed_comment_at": iso time}
+    st = strict_load(f'{d}/STATE.json')
     wt, branch, head = st['worktree'], st['branch'], st['head']
+    last = ledger_records(led, 'pr', int(n))
+    need(not (last and last[-1].get('status') == 'attempted'),
+         f'an earlier repair push to PR #{n} never reached an observed state. Check the PR on GitHub '
+         '(head, last comment, body) and record the outcome in pushed.jsonl by hand before retrying')
     clean_worktree_at(wt, head)
-    assert review_approves(d, head), 'latest review not APPROVE on head'
+    p = review_problems(d, head, POST_FILES_REPAIR)
+    need(not p, 'latest review does not approve this head and text: ' + '; '.join(p))
     suite_ok_at_head(d, wt, head)
     v = json.loads(run(['gh', 'pr', 'view', n, '-R', UP, '--json', 'headRefOid,headRefName,state,comments,body']))
-    assert v['state'] == 'OPEN', v['state']
-    assert v['headRefName'] == branch, (v['headRefName'], branch)
-    assert v['headRefOid'] == meta['head_at_start'], f"PR head moved on GitHub: {v['headRefOid']}"
+    need(v['state'] == 'OPEN', f"PR #{n} is {v['state']}")
+    need(v['headRefName'] == branch, f"PR branch {v['headRefName']} != {branch}")
+    need(v['headRefOid'] == meta['head_at_start'], f"PR head moved on GitHub: {v['headRefOid']}")
     newer = [c for c in v['comments'] if c['author']['login'] != FORK_OWNER
              and c['createdAt'] > meta['addressed_comment_at']]
-    assert not newer, f'new comment since the repair started: {[c["createdAt"] for c in newer]}'
+    need(not newer, f'new comment since the repair started: {[c["createdAt"] for c in newer]}')
     ff = sp.run(['git', 'merge-base', '--is-ancestor', meta['head_at_start'], head], cwd=wt).returncode == 0
     force = os.environ.get('ALLOW_FORCE_WITH_LEASE') == '1'
-    assert ff or force, 'repair is not a fast-forward of the pushed head (set ALLOW_FORCE_WITH_LEASE=1 to allow)'
+    need(ff or force, 'repair is not a fast-forward of the pushed head (set ALLOW_FORCE_WITH_LEASE=1 to allow)')
     merges_clean(wt, head)
-    assert gitleaks_ok(wt), 'gitleaks (the CI secret scan) flags this tree'
+    fix_commits_present(wt, head)
+    need(gitleaks_ok(wt), 'gitleaks (the CI secret scan) flags this tree')
     comment = open(f'{d}/comment.md').read()
     body = open(f'{d}/body.md').read() if os.path.exists(f'{d}/body.md') else None
     title = open(f'{d}/title.txt').read().strip() if os.path.exists(f'{d}/title.txt') else None
-    if ATTRIBUTION:
-        assert ATTRIBUTION in comment, 'comment lacks the ATTRIBUTION line'
-    no_verdict_token(comment + (body or '') + (title or ''), 'comment/body/title')
+    if body is not None:
+        p = body_problems(body)
+        need(not p, 'PR body: ' + '; '.join(p))
+    text_checks({'comment': comment, 'body': body, 'title': title}, attributed=('comment',))
     print(f'PR #{n} {branch}: {meta["head_at_start"][:8]} -> {head[:8]} ({"fast-forward" if ff else "force-with-lease"}); '
           f'comment {len(comment)} chars; body {"update" if body else "unchanged"}; title {title!r}')
     if not go:
         return
+    rec = dict(pr=int(n), old=meta['head_at_start'], new=head, effect='repair')
+    ledger_append(led, dict(rec, status='attempted'))
     push = ['git', 'push']
     if not ff:
         push.append(f'--force-with-lease={branch}:{meta["head_at_start"]}')
@@ -244,13 +518,9 @@ def repair(folder, go):
     v = json.loads(run(['gh', 'pr', 'view', n, '-R', UP, '--json', 'headRefOid,comments,body,title']))
     ok = (v['headRefOid'] == head and v['comments'][-1]['body'].strip() == comment.strip()
           and (body is None or v['body'].strip() == body.strip()) and (title is None or v['title'] == title))
-    rec = dict(pr=int(n), old=meta['head_at_start'], new=head, comment=cr, verified=ok,
-               at=datetime.datetime.now().isoformat(timespec='seconds'))
-    with open(f'{R}/pushed.jsonl', 'a') as f:
-        f.write(json.dumps(rec) + '\n')
+    rec = ledger_append(led, dict(rec, comment=cr, verified=ok, status='observed_succeeded' if ok else 'observed_failed'))
     print('PUSHED', json.dumps(rec))
-    if not ok:
-        sys.exit('READBACK MISMATCH')
+    need(ok, 'READBACK MISMATCH')
 
 
 # ---------------------------------------------------------------------------------------------
@@ -307,7 +577,11 @@ def loop(R, NEWDIR):
             return None
         if any(os.path.exists(f'{d}/{x}') for x in ('HOLD.md', 'PUSH-REFUSED.md', 'NOT-REPRODUCED.md')):
             return None
-        st = json.load(open(f'{d}/STATE.json'))
+        try:
+            st = strict_load(f'{d}/STATE.json')
+        except ValueError as e:
+            refuse(d, f'STATE.json does not parse strictly: {e}\n', 'bad STATE.json')
+            return None
         if is_new(d):
             if ledger_has(f'{NEWDIR}/published.jsonl', 'branch', st['branch']):
                 return None
@@ -322,7 +596,7 @@ def loop(R, NEWDIR):
                            capture_output=True, text=True).stdout.strip()
                 if s != 'MERGED':
                     return None
-        return st if review_approves(d, st['head']) else None
+        return st if review_approves(d, st['head'], POST_FILES_NEW if is_new(d) else POST_FILES_REPAIR) else None
 
     def suite(d, st):
         wt, head = st['worktree'], st['head']
