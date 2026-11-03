@@ -112,7 +112,7 @@ def load():
         sys.exit(f'loop settings: {e}')
     set_ = []
     for k, v in vals.items():
-        if k not in os.environ:
+        if not os.environ.get(k):  # unset or empty both mean "not set", as in the file
             os.environ[k] = v
             set_.append(k)
     return set_
@@ -128,7 +128,7 @@ def main(argv):
     if cmd == 'show':
         print(f'file: {path()}{"" if os.path.exists(path()) else " (missing)"}')
         for k, (req, what) in KEYS.items():
-            if k in os.environ:
+            if os.environ.get(k):
                 src, v = 'environment', os.environ[k]
             elif k in vals:
                 src, v = 'file', vals[k]
@@ -137,7 +137,7 @@ def main(argv):
             print(f'{k:22} {src:11} {v}')
         return 0
     if cmd == 'check':
-        missing = [k for k, (req, _) in KEYS.items() if req and k not in os.environ and k not in vals]
+        missing = [k for k, (req, _) in KEYS.items() if req and not os.environ.get(k) and k not in vals]
         if missing:
             print('missing: ' + ', '.join(missing))
             return 1

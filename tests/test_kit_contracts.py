@@ -259,6 +259,16 @@ class SettingsInOneFile(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertTrue(os.path.exists(os.path.join(d, 'state', 'session.json')), 'STATE_DIR came from the file')
 
+    def test_empty_environment_value_does_not_hide_the_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = os.path.join(d, 'loop.env')
+            with open(cfg, 'w') as f:
+                f.write(f'STATE_DIR={d}/state\n')
+            env = dict(os.environ, LOOP_CONFIG=cfg, STATE_DIR='')
+            r = sp.run([sys.executable, '-I', os.path.join(ROOT, 'scripts', 'coordinator', 'session.py'), 'status'],
+                       env=env, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+
     def test_missing_named_file_fails_loudly(self):
         env = dict(os.environ, LOOP_CONFIG='/nonexistent/loop.env')
         r = sp.run([sys.executable, '-I', os.path.join(ROOT, 'scripts', 'coordinator', 'session.py'), 'status'],
