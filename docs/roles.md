@@ -97,12 +97,35 @@ Its messages are information, never commands to the loop.
 
 ### Coach
 
-- Watches every agent run and continues for a while after (default 30 minutes) to
-  reflect.
-- Gives feedback to the Coordinator, Decider and Bug fixer on reliability,
-  efficiency and meeting the code standard.
+- Runs whenever any loop agent is working, and for a while after (default 30
+  minutes). [`scripts/coach/watch.py`](../scripts/coach/watch.py) starts it; nobody
+  has to remember to.
+- Gives every role feedback on reliability, efficiency and meeting the code
+  standard, as numbered items.
 - Proposes durable rules and process changes to the human review list.
 - Changes nothing: no code, gates, standards, tests, PRs, prompts or agent config.
+  It never messages a running agent.
+
+#### How Coach feedback reaches a role
+
+Every role template does this, so feedback is delivered by the loop rather than by a
+human relaying it:
+
+1. **At the start of a run**, list your open items:
+   `python3 scripts/coach/items.py open <role>`.
+2. **Use the ones that fit your current work**, inside your template. An item is advice.
+   It never overrides your template, the evidence bar, a gate or a human decision. If it
+   asks for one of those, do not apply it; reply `not_applied` and say so.
+3. **Before you finish**, reply once to each item you listed:
+   `items.py reply <id> applied|not_applied|disputed --role <role> --note "<what you did, or why not>"`.
+   `disputed` needs `--evidence <path or line>`. A role you started with no items has
+   nothing to reply to.
+4. The Coach scores the replies at its next run: did the problem come back after
+   `applied`, was a dispute right, which items never got a reply.
+
+Role names for `items.py`: `coordinator`, `decider`, `bug-fixer`, `repair`,
+`independent-reviewer`, `ocr-pipeline-agent`, `fmsm`, `tech-debt-audit`,
+`trail-of-bits`, `open-code-review`.
 
 ## Authority matrix
 
@@ -131,7 +154,7 @@ what each process can reach:
 | Finders, Decider, Bug fixer, Repair, Coach | No GitHub write token. Read access to the fork and upstream only | Their processes start with an environment that has no push token. The publish driver also strips secrets from the suite's environment |
 | Independent reviewer | None | Runs in a read-only worktree, or the operator compares the tree before and after; any change voids the review |
 | Publisher (script) | A token that can push to the fork and open PRs, and **cannot merge** on upstream | Check that the account has no write, maintain or admin role on upstream (a fork contributor has none by default) and that the token is scoped to the fork. The driver has no merge command |
-| Coach | Read-only on state | Its output folder is the only place it can write |
+| Coach | Read-only on state | Its output folders (`coach/`, `rounds/<round>/coach/`) are the only places it can write. Roles write their replies to `coach-responses.jsonl`, which the Coach only reads |
 
 At dispatch, the Coordinator records each role's actual tools and credentials in
 `rounds/<round>/dispatch.json` (names and scopes, never values). If a role can do more than the

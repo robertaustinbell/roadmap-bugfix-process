@@ -27,8 +27,11 @@ Set by the operator (environment or `ocr-pipeline.json`, see [scripts/ocr/README
 
 0. If `B/triage-NN/TRIAGE-RUNNING` exists for the part you would act on, someone is triaging it by hand. Do nothing for that part (no dispatch, no stage change) and reply `waiting on triage`.
 1. If the monitor line is `idle`, reply `idle` and stop.
-2. `touch P/agent.lock`. Append a line to `P/agent.log` at the start and end of each step. Remove the lock when you finish, including on early exit.
+2. `touch P/agent.lock`. If `STATE_DIR` is set, also run `python3 scripts/coach/watch.py begin ocr-pipeline-agent` (and `end` when you remove the lock). Append a line to `P/agent.log` at the start and end of each step. Remove the lock when you finish, including on early exit.
 3. `python3 st.py show`. Act on the first part that is not `done` (call it NN, name `NN-xxx`).
+   Also list your Coach items (`python3 scripts/coach/items.py open ocr-pipeline-agent`), use
+   the ones that fit this tick, and reply to each before you remove the lock
+   ([how](../docs/roles.md#how-coach-feedback-reaches-a-role)).
 
 ### Stage `scanned`
 

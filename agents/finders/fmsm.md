@@ -34,6 +34,7 @@ problems, privacy gaps, and tests that pass without proving anything.
 - `$KNOWN`.
 - The scope for this round: `full` on one or two streams, or `incremental` on
   `<last pin>...$PIN` (the Coordinator says which).
+- Coach feedback: your open items, from `python3 scripts/coach/items.py open fmsm`. Use them inside this template and reply to each before you finish ([how](../../docs/roles.md#how-coach-feedback-reaches-a-role)).
 
 ## Outputs
 

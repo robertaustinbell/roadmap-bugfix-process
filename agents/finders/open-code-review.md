@@ -32,6 +32,7 @@ out, and the part it stopped in resumes next round.
 - `$OCR_STATE/state.json`: per part `stage` (`queued | scanning | usage-wait |
   scanned | done`), `session_id`, `base`, files done.
 - `$KNOWN`.
+- Coach feedback: your open items, from `python3 scripts/coach/items.py open open-code-review`. Use them inside this template and reply to each before you finish ([how](../../docs/roles.md#how-coach-feedback-reaches-a-role)).
 
 ## Outputs
 

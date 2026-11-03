@@ -34,6 +34,7 @@ findings overlapped. Run both.
 
 - `$PIN_WORKTREE` at `$PIN` (read-only).
 - `$KNOWN`, `$PREVIOUS_AUDIT`.
+- Coach feedback: your open items, from `python3 scripts/coach/items.py open tech-debt-audit`. Use them inside this template and reply to each before you finish ([how](../../docs/roles.md#how-coach-feedback-reaches-a-role)).
 
 ## Outputs
 

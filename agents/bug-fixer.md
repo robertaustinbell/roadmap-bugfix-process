@@ -30,6 +30,7 @@ existing loop PR.
   `upstream/main`.
 - Repair mode only: the PR number, the review comment(s) verbatim, the round number of
   this repair.
+- Coach feedback: your open items, from `python3 scripts/coach/items.py open bug-fixer`. Use them inside this template and reply to each before you finish ([how](../docs/roles.md#how-coach-feedback-reaches-a-role)).
 
 ## Outputs
 

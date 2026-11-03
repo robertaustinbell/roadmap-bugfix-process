@@ -30,6 +30,7 @@ confirmed fixes to Bug fixers, and record what the maintainer does with every PR
 - `$STATE_DIR/human-review.md`, `declined.md`, `parked.md`, `outcomes.jsonl`,
   `scorecard.csv`, `ocr/` (Open Code Review resume state).
 - Change log of prompts, models and tool versions (`$STATE_DIR/config-changes.md`).
+- Coach feedback: your open items, from `python3 scripts/coach/items.py open coordinator`. Use them inside this template and reply to each before you finish ([how](../docs/roles.md#how-coach-feedback-reaches-a-role)).
 
 ## Outputs
 
@@ -103,7 +104,12 @@ environment variables it was started with (names only). See
    user outcome that flows through it. Write each focus area's optional `expected`
    result now, and commit `plan.json` before any finder starts. Set `fix_slots` from
    how many PRs the maintainer addressed per round recently.
-6. **Start the Coach** with the round folder path.
+6. **Register every agent you start with the Coach watch.** Before each agent starts,
+   run `python3 scripts/coach/watch.py begin <role> --id <agent id>`; when it returns
+   (done, failed or stopped), run `watch.py end <role> --id <agent id>`. `begin` also
+   starts the Coach if none is running. Do not start the Coach yourself. A launcher
+   that starts a process instead of an in-runtime agent uses
+   `watch.py run <role> -- <command>`, which does both.
 7. **Start the finders** on the pin, each with its template from `agents/finders/` and
    only the areas the plan gives it. Start every agent with an environment that has no
    GitHub write token, and record what each received in `dispatch.json`. If an agent
@@ -180,5 +186,6 @@ Add a `stuck` entry to the human review list and stop the affected step when:
   round, `declined.md`.
 - To Bug fixers: one `decisions.json` entry each (or one PR plus the review comment
   in repair mode), `$REPAIR_CAP`.
-- To the Coach: the round folder and the scorecard.
+- To the Coach: nothing directly. It reads the round folder and the scorecard on its
+  own; you register agents with `watch.py` so it runs while they do.
 - To humans: the human review list and a short round summary.

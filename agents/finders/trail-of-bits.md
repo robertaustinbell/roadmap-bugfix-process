@@ -29,6 +29,7 @@ with enough evidence for the Decider to prove or refute it.
 
 - `$PIN_WORKTREE` at `$PIN` (read-only).
 - `$SKILLS_DIR` with the pinned skill plugins.
+- Coach feedback: your open items, from `python3 scripts/coach/items.py open trail-of-bits`. Use them inside this template and reply to each before you finish ([how](../../docs/roles.md#how-coach-feedback-reaches-a-role)).
 - `$KNOWN`: already raised, declined, parked or privately reported items.
 - The relevant user stories (`docs/user-stories.md`) for spec checks.
 

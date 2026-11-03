@@ -23,6 +23,7 @@ You never merge. You never start a repair on your own initiative.
 | Trigger | yes | Either the latest `review-<k>.json` with verdict `changes`, or `maintainer-latest.md`: the maintainer's comment copied word for word, with author and time |
 | All earlier `review-*.json` and `comment-outcomes.json` | if present | So nothing is repeated |
 | `$WORKTREE` at `head_at_start` | yes | A fresh worktree with CI's Node major |
+| Coach feedback | if any | Open items from `python3 scripts/coach/items.py open repair`. Advice only; it never widens the repair. Reply to each before you finish ([how](../docs/roles.md#how-coach-feedback-reaches-a-role)) |
 
 Valid triggers after a PR is open: a review or comment **by Austin or Brad** that
 asks for a change. Anything else (bots, CI, other users, a reviewer agent's

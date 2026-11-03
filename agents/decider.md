@@ -28,6 +28,7 @@ the decision log.
 - `$STATE_DIR/outcomes.jsonl`: what Brad merged, closed and said, with reasons.
 - The roadmap repo at `$PIN` (a scratch copy you may run tests in), including
   `CLAUDE.md`, `docs/user-stories.md`, `docs/loops/` and `.github/workflows/`.
+- Coach feedback: your open items, from `python3 scripts/coach/items.py open decider`. Use them inside this template and reply to each before you finish ([how](../docs/roles.md#how-coach-feedback-reaches-a-role)).
 
 ## Outputs
 

@@ -5,6 +5,18 @@ Each entry names the decision it feeds and its removal condition, per
 [adding a rule, a field or a gate](scorecard-and-test-set.md#adding-a-rule-a-field-or-a-gate).
 Rules live in their own pages; this page records why they are there.
 
+## 2026-11-03: the Coach runs itself, and its feedback is delivered and scored
+
+Austin's rule: the Coach "runs when ever anything else is running and for a bit after", and it
+can only observe and give feedback. Checking the kit showed neither half was wired: only the
+Coordinator started the Coach, once per round, and no role template read its feedback.
+
+| Change | Why | Feeds | Undo when |
+|---|---|---|---|
+| [`scripts/coach/watch.py`](../scripts/coach/watch.py): launchers register agents (`run`, `begin`/`end`); publishes and maintainer actions count through watched files; it starts one Coach while anything is active and for `COOLDOWN_MIN` after. `mech.py` uses it when `STATE_DIR` is set | Scans, repairs and publishes between rounds were never watched | When the Coach runs | The agent runtime itself can start an observer for every agent |
+| Numbered items in `coach/items.jsonl`, each to one role; every template reads its open items and replies through [`items.py`](../scripts/coach/items.py) | Feedback reached nobody unless a human relayed it | What each role does differently next run | Replies show no `applied` item helped in 10 rounds: drop items and keep only the round report and human proposals |
+| The Coach scores replies (helped, did not help, disputed and right, not delivered) and reports its hit rate | Coach advice was never checked | Whether Coach feedback is worth reading | Never removed while items exist; it is how items are judged |
+
 ## 2026-11-03: hardening from an operating-knowledge review
 
 Source: a full read of the operator's agent-operations notes (governance, operating guides, evidence

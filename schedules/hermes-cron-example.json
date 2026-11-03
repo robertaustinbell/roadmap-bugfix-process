@@ -8,7 +8,10 @@
       "script": "ocr_pipeline_mech.py",
       "prompt": "",
       "skills": [],
-      "schedule": { "kind": "interval", "minutes": 15 },
+      "schedule": {
+        "kind": "interval",
+        "minutes": 15
+      },
       "deliver": "<your-notice-target>",
       "enabled": true
     },
@@ -21,9 +24,26 @@
       "skills": [],
       "model": "<pinned-model>",
       "provider": "<pinned-provider>",
-      "schedule": { "kind": "interval", "minutes": 30 },
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30
+      },
       "deliver": "local",
       "failure_deliver": "<your-notice-target>",
+      "enabled": true
+    },
+    {
+      "name": "Coach watch",
+      "_comment": "No AI. Starts the Coach (COACH_CMD) while any loop agent works and for COOLDOWN_MIN after; prints nothing unless it started one. Set STATE_DIR, COACH_CMD and WATCH_FILES in the job environment. Copy scripts/coach/watch.py to the Hermes scripts folder as coach_watch.py.",
+      "no_agent": true,
+      "script": "coach_watch.py",
+      "prompt": "",
+      "skills": [],
+      "schedule": {
+        "kind": "interval",
+        "minutes": 5
+      },
+      "deliver": "local",
       "enabled": true
     }
   ]

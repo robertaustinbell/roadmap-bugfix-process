@@ -31,6 +31,10 @@ missing.
 
 Do not read the fixer's notes, transcript or reasoning, even if present.
 
+Coach feedback: `python3 scripts/coach/items.py open independent-reviewer` lists advice
+about how you review (never about this fix, and never a verdict). Use it, and reply to each
+item before you finish ([how](../docs/roles.md#how-coach-feedback-reaches-a-role)).
+
 ## Outputs
 
 One file: `review-<round>.json`, valid against

@@ -99,6 +99,39 @@ class CandidateContract(unittest.TestCase):
         self.assertTrue(set(enum) <= set(statuses), set(enum) - set(statuses))
 
 
+class CoachFeedbackContract(unittest.TestCase):
+    TEMPLATES = {
+        'coordinator': 'agents/coordinator.md', 'decider': 'agents/decider.md',
+        'bug-fixer': 'agents/bug-fixer.md', 'repair': 'agents/repair.md',
+        'independent-reviewer': 'agents/independent-reviewer.md',
+        'ocr-pipeline-agent': 'agents/ocr-pipeline-agent.md',
+        'fmsm': 'agents/finders/fmsm.md', 'tech-debt-audit': 'agents/finders/tech-debt-audit.md',
+        'trail-of-bits': 'agents/finders/trail-of-bits.md',
+        'open-code-review': 'agents/finders/open-code-review.md',
+    }
+
+    def roles_in_items_py(self):
+        m = re.search(r"ROLES = \(([^)]*)\)", text('scripts/coach/items.py'))
+        return re.findall(r"'([a-z-]+)'", m.group(1))
+
+    def test_every_role_reads_its_items(self):
+        self.assertEqual(sorted(self.roles_in_items_py()), sorted(self.TEMPLATES))
+        for role, path in self.TEMPLATES.items():
+            with self.subTest(role):
+                self.assertIn(f'items.py open {role}', text(path))
+
+    def test_roles_md_lists_the_same_role_names(self):
+        md = text('docs/roles.md')
+        sec = md[md.index('#### How Coach feedback reaches a role'):md.index('## Authority matrix')]
+        names = re.findall(r'`([a-z-]+)`', sec.split('Role names for `items.py`:')[1])
+        self.assertEqual(sorted(names), sorted(self.TEMPLATES))
+
+    def test_coach_md_lists_the_same_role_names(self):
+        md = text('agents/coach.md')
+        line = md[md.index('- `to` is one role:') + len('- `to` is one role:'):md.index('- A suggestion is')]
+        self.assertEqual(sorted(re.findall(r'`([a-z-]+)`', line)), sorted(self.TEMPLATES))
+
+
 class SchemasParse(unittest.TestCase):
     def test_every_schema_is_strict_json(self):
         def no_dupes(pairs):

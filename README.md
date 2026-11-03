@@ -68,7 +68,7 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
 | [docs/trial-static-site.md](docs/trial-static-site.md) | One full trial run on a different repo, and what it changed |
 | [agents/](agents/) | Copy-paste prompt templates for every agent |
 | [templates/](templates/) | PR body and JSON schemas for findings, gate results, reviews |
-| [scripts/](scripts/) | Portable scripts: OCR pipeline, publish driver, outcome data, kit checker |
+| [scripts/](scripts/) | Portable scripts: OCR pipeline, publish driver, Coach watch and feedback items, outcome data, kit checker |
 | [tests/](tests/) | Tests for the publish driver and for the kit's own consistency |
 | [schedules/](schedules/) | Cron, launchd, and Hermes Agent job examples |
 | [data/](data/) | Real public PR outcomes, scorecard baseline, test-set seed |

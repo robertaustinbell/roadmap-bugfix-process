@@ -81,8 +81,14 @@ security-policy questions. Those go to a human (see
                          |  Austin or Brad asks)   v
                          +--------------------  Decider calibration, Scorecard
 
-   Coach: watches every run (and a while after), changes nothing, writes feedback.
+   Coach: runs whenever any agent runs (and a while after), changes nothing, writes
+   numbered feedback items; each role reads its items next run and replies.
 ```
+
+The Coach is started by [`scripts/coach/watch.py`](../scripts/coach/watch.py), not by a
+person and not on a timetable. Every launcher registers the agents it starts; a publish or
+a maintainer action counts too. See [roles.md](roles.md#how-coach-feedback-reaches-a-role)
+for how its feedback reaches each role and how replies are scored.
 
 ## 3. Round lifecycle
 
@@ -124,7 +130,7 @@ The Coordinator:
    them), spends most of the budget on the top areas, keeps a share for the least
    recently scanned ones, and never lets an area go unscanned longer than a set number of
    rounds. See [prioritization.md](prioritization.md).
-5. Starts the Coach.
+5. Registers each agent it starts with the Coach watch, which starts the Coach.
 6. Starts the finders on the pin, each on the areas the plan gives it.
 
 ### 3.3 Find
@@ -417,7 +423,10 @@ $STATE_DIR/
     decider/decisions.json # one entry per merged candidate
     decider/witness/<id>/  # frozen failing tests and run logs
     fixes/<slug>/          # one folder per fix (see bug-fixer.md)
-    coach/feedback.md
+    coach/feedback.md      # the Coach's round report, for humans
+  coach/items.jsonl        # Coach feedback items, each addressed to one role
+  coach-responses.jsonl    # each role's reply to its items (the Coach only reads this)
+  activity/                # scripts/coach/watch.py: who is working, last activity, Coach pid
 ```
 
 `$WORKDIR` is the clone of the roadmap repo (or its fork). Every agent works in its

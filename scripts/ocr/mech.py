@@ -34,6 +34,11 @@ else ocr-pipeline.json next to this script):
   PUBLISH_DRIVER    default ../publish/driver.py relative to this script.
   NOTIFY_CMD        optional. Command that receives each notice on stdin (argv split with shlex).
                     Without it, notices are printed to stdout (Hermes cron delivers stdout).
+  STATE_DIR         optional. The loop state folder. When set, scans are registered with the
+                    Coach watch (../coach/watch.py) and every tick runs `watch.py tick`, so the
+                    Coach runs while scans and agents work. COACH_CMD, COOLDOWN_MIN and
+                    WATCH_FILES are read by watch.py from the environment. Add the publish
+                    ledger (FIXES_DIR/published.jsonl) to WATCH_FILES so a publish counts.
 
 Our notices are plain status lines. Nothing here posts to GitHub.
 """
@@ -49,6 +54,7 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+WATCH = os.path.join(HERE, '..', 'coach', 'watch.py')
 REPING_S = 24 * 3600                                   # re-send a still-open stall once a day
 STALL_S = {'scanned': 6 * 3600, 'reviewing': 18 * 3600}
 LIMIT_PAT = ('usage_limit', 'usage limit', 'rate_limit_exceeded', 'insufficient_quota')
@@ -62,7 +68,7 @@ def load_config():
         with open(path) as f:
             cfg = json.load(f)
     keys = ('OCR_BASE_DIR', 'OCR_PIPELINE_DIR', 'ROADMAP_WORKTREE', 'UPSTREAM_REMOTE', 'UPSTREAM_BRANCH',
-            'OCR_BIN', 'KEEP_AWAKE', 'ROUND_DIR', 'FIXES_DIR', 'PUBLISH_DRIVER', 'NOTIFY_CMD')
+            'OCR_BIN', 'KEEP_AWAKE', 'ROUND_DIR', 'FIXES_DIR', 'PUBLISH_DRIVER', 'NOTIFY_CMD', 'STATE_DIR')
     for k in keys:
         if os.environ.get(k) is not None:
             cfg[k] = os.environ[k]
@@ -272,8 +278,12 @@ def launch_scan(part):
     logf = os.path.join(RESULTS, f'{name}.log')
     part['log_start'] = os.path.getsize(logf) if os.path.exists(logf) else 0
     out = open(os.path.join(P, f'scan-{name}.out'), 'a')
-    pr = sp.Popen([sys.executable, os.path.abspath(__file__), 'scan-part', name],
-                  stdout=out, stderr=sp.STDOUT, start_new_session=True)
+    cmd = [sys.executable, os.path.abspath(__file__), 'scan-part', name]
+    if CFG.get('STATE_DIR'):
+        # the scan counts as loop activity for as long as it runs, so the Coach watches it
+        cmd = [sys.executable, '-I', WATCH, 'run', 'ocr-scan', '--'] + cmd
+    pr = sp.Popen(cmd, stdout=out, stderr=sp.STDOUT, start_new_session=True,
+                  env=coach_env())
     keep_since = part.get('stage') == 'usage-wait' and part.get('stage_since')
     part.update(stage='scanning', pid=pr.pid, last_try=now, stage_since=keep_since or now)
     log(f'launched scan {name} pid {pr.pid} base {part.get("base", "")[:8]}')
@@ -307,6 +317,23 @@ def keep_driver_running():
         cmd += ['--fixes-dir', CFG['FIXES_DIR']]
     sp.Popen(cmd, cwd=rd, stdout=open(os.path.join(rd, 'driver.out'), 'a'), stderr=sp.STDOUT, start_new_session=True)
     log('publish driver was not running; launched it')
+
+
+def coach_env():
+    env = dict(os.environ)
+    if CFG.get('STATE_DIR'):
+        env['STATE_DIR'] = os.path.abspath(os.path.expanduser(CFG['STATE_DIR']))
+    return env
+
+
+def coach_tick():
+    """Start the Coach if anything is working or just finished. Never fails the tick."""
+    if not CFG.get('STATE_DIR'):
+        return
+    r = sp.run([sys.executable, '-I', WATCH, 'tick'], capture_output=True, text=True, env=coach_env())
+    out = (r.stdout or r.stderr).strip()
+    if r.returncode != 0 or out.startswith('started'):
+        log(f'coach watch: {out[-300:]}')
 
 
 def tick(st):
@@ -413,6 +440,10 @@ def main():
             tick(st)
         except Exception as e:  # log locally, never spam; a crash shows in mech.log
             log(f'ERROR {e!r}')
+        try:
+            coach_tick()
+        except Exception as e:
+            log(f'coach watch ERROR {e!r}')
         tmp = STATE + '.tmp'
         with open(tmp, 'w') as f:
             json.dump(st, f, indent=1)
