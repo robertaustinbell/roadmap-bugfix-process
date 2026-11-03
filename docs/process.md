@@ -118,8 +118,14 @@ The Coordinator:
 3. Builds the **known list**: open and closed loop PRs, the human review list,
    Declined items, private reports already sent (by ID only), and maintainer issues.
    Finders and the Decider use it to avoid re-reporting.
-4. Starts the Coach.
-5. Starts all four finders on the pin.
+4. Writes the **round plan** (`plan.json`): which areas of the repo this round covers,
+   which finders go where, and the round's budget. The Coordinator ranks areas by
+   impact, recent change, past yield, exposure, weak tests, outside reports and
+   staleness, spends most of the budget on the top areas, keeps a share for the least
+   recently scanned ones, and never lets an area go unscanned longer than a set number of
+   rounds. See [prioritization.md](prioritization.md).
+5. Starts the Coach.
+6. Starts the finders on the pin, each on the areas the plan gives it.
 
 ### 3.3 Find
 
@@ -135,9 +141,10 @@ the maintainer, writes code or touches GitHub.
 | tech-debt-audit | broken tooling and guards, dead code, stale docs, consistency rot | [tech-debt-audit.md](../agents/finders/tech-debt-audit.md) |
 | Open Code Review | line-level comments on the next unscanned part of the repo | [open-code-review.md](../agents/finders/open-code-review.md) |
 
-Open Code Review scans one part of the repo after another until the scanner's
-model usage runs out. The part it stopped in resumes at the start of the next
-round. It has no schedule of its own and no retry loop.
+Open Code Review scans the parts the round plan gives it, in plan order, until the
+scanner's model usage or the round's token budget runs out. A part it stopped in
+resumes next round if the plan still includes it. It has no schedule of its own and
+no retry loop.
 
 ### 3.4 Decide
 

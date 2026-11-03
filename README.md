@@ -63,6 +63,7 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
 | [docs/repo-triage-notes.md](docs/repo-triage-notes.md) | Repo-specific lessons that flipped verdicts |
 | [docs/scorecard-and-test-set.md](docs/scorecard-and-test-set.md) | How the loop is measured |
 | [docs/open-questions.md](docs/open-questions.md) | Unsettled decisions and their working answers |
+| [docs/prioritization.md](docs/prioritization.md) | How the Coordinator picks what each round works on |
 | [docs/trial-static-site.md](docs/trial-static-site.md) | One full trial run on a different repo, and what it changed |
 | [agents/](agents/) | Copy-paste prompt templates for every agent |
 | [templates/](templates/) | PR body and JSON schemas for findings, gate results, reviews |
