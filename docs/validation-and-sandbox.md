@@ -6,13 +6,15 @@ Three layers:
 1. [Offline synthetic sandbox](#1-offline-synthetic-sandbox): target code runs in
    a locked-down container with no network and no credentials.
 
-   **What the publish driver does today:** it runs the full suite on the host, as the
-   operator's user, with an environment built from an allow-list, a throwaway `HOME` and no
+   **What the publish driver does today:** it runs the secret-fixture check (and, only
+   with `LOCAL_SUITE=shared`, the local full suite) on the host, as the operator's user, with an environment built from an allow-list, a throwaway `HOME` and no
    SSH agent socket. That keeps tokens and `~/.config/gh`, `~/.ssh` and `~/.npmrc` out of
    reach by their usual paths. It does not stop code that opens files by absolute path,
    asks the macOS keychain, or uses the network. The container below is the target, and
    is not wired into the driver yet.
-2. [Full suite](#full-suite): the whole test suite at the exact head, run serially.
+2. [CI on the pushed head](#ci-on-the-pushed-head): the maintainer's CI runs the whole
+   suite on every push; the publisher waits for it. The
+   [local full suite](#optional-local-full-suite) is optional, for shared code only.
 3. [Live validation](#3-live-validation): browser, two-tab, real cloud storage or
    a phone simulator, for what offline tests cannot settle.
 
@@ -102,9 +104,20 @@ storage, synthetic roles and a synthetic secret. Rules:
   keys.
 - Remove containers in a `finally` path.
 
-## Full suite
+## CI on the pushed head
 
-The full suite runs at the exact head that was reviewed and gated.
+The maintainer's CI runs the whole suite in shards, plus typechecks, builds, gitleaks,
+the dependency audit and the user-stories check, on every push (about three minutes).
+That is the suite run that counts. The publisher waits for every check run on the exact
+pushed head and reports the head only when all pass
+([publishing.md](publishing.md#the-ci-gate)). Before the push, the fixer runs the
+targeted tests ([quality-gates.md](quality-gates.md#test-evidence-that-goes-with-the-gates)).
+
+## Optional local full suite
+
+Off by default. With `LOCAL_SUITE=shared` the publisher runs it only when the change
+touches shared record, sync or storage code (`SHARED_SUITE_PATHS`). When it runs, it
+runs at the exact head that was reviewed and gated.
 
 1. **Serial, one at a time.** One suite saturates a laptop. Parallel suites push
    load high enough to time out timing-sensitive tests. Parallelise everything
@@ -117,14 +130,14 @@ The full suite runs at the exact head that was reviewed and gated.
 
    ```sh
    TZ=UTC node node_modules/vitest/vitest.mjs run \
-     --maxWorkers=4 --reporter=json --outputFile="$OUT/full-suite.json"
+     --maxWorkers=4 --reporter=json --outputFile="$OUT/local-suite.json"
    ```
 
    On timeout, kill the whole group. A hung suite at 0% CPU stalls every PR behind
    it.
 4. **Do not edit a worktree while its suite runs.** That run is void even if it
    passes. When a repair lands mid-run, stop and restart.
-5. **Rename superseded results** (`full-suite-superseded.json`) so stale evidence
+5. **Rename superseded results** (`local-suite-superseded.json`) so stale evidence
    cannot be read as current. Record which head each surviving result belongs to.
 6. **Update the PR body in the same step** as the result lands: head, passed,
    skipped, failed, counted from the JSON assertion results.
@@ -154,14 +167,15 @@ same untouched file fails on two different heads → main flake; add to known li
 - `merge-tree` finds only text conflicts. Also run test files main added or
   changed since the head's base, at the head:
   `git diff --name-only "$BASE" upstream/main -- '*.test.*'`.
-- Run the secret scan CI runs, at the version CI pins, on every head before push.
-  Fix a false positive by renaming the identifier, never by adding an allowlist
-  entry.
+- Run the secret scan CI runs, at the version CI pins, on every head before push,
+  and the secret-fixture check with the roadmap repo's own rules
+  ([publishing.md](publishing.md#the-secret-fixture-check)). Fix a false positive by
+  renaming the identifier, never by adding an allowlist entry.
 
 ### After upstream moves
 
 A clean merge is not a correct result. For each open loop PR, test the merge onto
-the new main (full suite and type-checks). Push a corrective commit only when
+the new main (targeted tests and type-checks; CI runs the whole suite on any push). Push a corrective commit only when
 behaviour breaks, with the test that shows it, and add an "Update" note to the PR
 body.
 

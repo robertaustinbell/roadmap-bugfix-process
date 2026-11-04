@@ -20,6 +20,7 @@ Related documents:
   [FMSM](../agents/finders/fmsm.md),
   [tech-debt-audit](../agents/finders/tech-debt-audit.md),
   [Open Code Review](../agents/finders/open-code-review.md),
+  [Adversary](../agents/adversary.md),
   [Independent reviewer](../agents/independent-reviewer.md),
   [Repair](../agents/repair.md)
 - Depth on single steps: [quality gates](quality-gates.md),
@@ -73,7 +74,11 @@ security-policy questions. Those go to a human (see
                    | Bug fixer  |   (or a question to      (never public)
                    | 1 fix / PR |    Brad, not a PR)
                    +-----+------+
-                         | gates pass, independent review approves
+                         | gates pass, adversary finds no blocker,
+                         | independent review approves
+                         v
+                    Publisher: checks, push, CI green on the pushed head
+                         |
                          v
                     Pull request  ------>  Brad acts (merge / close / review / ask)
                          ^                         |
@@ -242,16 +247,24 @@ For each `fix` route the [Bug fixer](../agents/bug-fixer.md):
 2. Places the Decider's frozen failing test and sees it fail on unfixed code.
 3. Makes the smallest change that fixes every listed site of the pattern.
 4. Passes the per-PR gates in the [code standard](code-standard.md#4-per-pr-gates):
-   strict `tsc`, CRAP, mutation ratchet, FMSM incremental review, full suite.
-5. Gets an independent review (an agent that did not write the fix).
-6. Opens one PR with the required body (Testing, Risk, How to revert).
+   targeted tests (including files that name a changed file), typechecks, strict
+   `tsc`, CRAP, mutation ratchet, FMSM incremental review, the secret-fixture check.
+5. Survives an adversarial pass ([adversary](../agents/adversary.md)): a fresh agent
+   tries to break the fix; blocking findings go back to step 3, residuals go into the
+   AC text and the PR body's Known limits line.
+6. Gets an independent review (an agent that did not write the fix), which also checks
+   the adversarial pass.
+7. Opens one PR with the required body (Testing, Risk, How to revert, Known limits),
+   from a fresh `upstream/main` with the next AC number free on `main`. The publisher
+   then waits for CI on the pushed head; only a green head is reported to the
+   maintainer's agent ([publishing.md](publishing.md#the-ci-gate)).
 
 There is no limit on the number of PRs for confirmed real bugs. One fix per PR.
 
 **Round integration check.** Each branch passing on its own is not enough: two fixes can
 each be green and break each other. Before the round's PRs open, merge all of the
-round's fix branches onto the pin in a throwaway worktree and run the full suite there
-(and any browser checks). A failure or a conflict goes back to the Bug fixer for the
+round's fix branches onto the pin in a throwaway worktree and run every branch's targeted
+tests and the typechecks there (and any browser checks). A failure or a conflict goes back to the Bug fixer for the
 branches involved. Example from a trial: a security-header fix allowed one exact inline
 script by hash, and two menu fixes changed that script; each branch was green, the
 combined site would have blocked the menu.
@@ -520,7 +533,7 @@ The loop is defined by its files and rules, not by any one runtime.
   mutation are N/A for markup-only diffs), where expected behaviour is written down
   (README, design doc, tests), and the risk rows that matter. A gate marked N/A needs a
   one-line reason.
-- Long, mechanical steps (serial full-suite runs, pushing, read-back checks) are
+- Long, mechanical steps (waiting for CI, pushing, read-back checks) are
   best done by a small deterministic script, not by a model.
 - One working setup (the operator's) uses Hermes Agent cron jobs: a no-model job for
   mechanics (scanner start/stop, driver keep-alive, stall notices) and a gated agent

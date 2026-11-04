@@ -60,7 +60,9 @@ GOOD_BODY = textwrap.dedent('''\
     ## Testing
 
     - **Failing test first:** `keeps the last day` in `app/lib/range.test.ts` failed at base.
-    - **Full suite** at head: 812 passed, 3 skipped, 0 failed.
+    - **Targeted tests** at head: 3 files, 812 passed, 0 failed.
+    - **CI** on the pushed head: the loop reports the head only after every check passes.
+    - **Known limits:** none beyond the acceptance criterion.
 
     ```sh
     npx vitest run app/lib/range.test.ts
@@ -343,6 +345,71 @@ class Addressed(unittest.TestCase):
         self.assertEqual(self.rc(), 0)
 
 
+def check_run(name, status='completed', conclusion='success', **kw):
+    return dict({'name': name, 'status': status, 'conclusion': conclusion, 'html_url': f'https://ci.example/{name}'}, **kw)
+
+
+class CiClassify(unittest.TestCase):
+    """The CI gate's reading of GitHub check runs for one head (sample shapes from the check-runs API)."""
+
+    def test_success_skipped_and_neutral_are_green(self):
+        runs = [check_run('test (1/6)'), check_run('gitleaks', conclusion='skipped'), check_run('audit', conclusion='neutral')]
+        self.assertEqual(D.classify_checks(runs), ('green', []))
+
+    def test_any_failure_is_red_and_named(self):
+        runs = [check_run('test (1/6)'), check_run('typecheck', conclusion='failure'), check_run('build', conclusion='cancelled')]
+        state, bad = D.classify_checks(runs)
+        self.assertEqual(state, 'red')
+        self.assertEqual([r['name'] for r in bad], ['typecheck', 'build'])
+
+    def test_unknown_or_missing_conclusion_is_red(self):
+        for c in ('timed_out', 'action_required', 'stale', 'startup_failure', None, 'something-new'):
+            with self.subTest(c):
+                self.assertEqual(D.classify_checks([check_run('a'), check_run('b', conclusion=c)])[0], 'red')
+
+    def test_running_or_queued_is_pending_even_with_a_failure(self):
+        runs = [check_run('a', conclusion='failure'), check_run('b', status='in_progress', conclusion=None)]
+        self.assertEqual(D.classify_checks(runs), ('pending', []))
+        self.assertEqual(D.classify_checks([check_run('a', status='queued', conclusion=None)])[0], 'pending')
+
+    def test_no_runs_yet_is_pending_not_green(self):
+        self.assertEqual(D.classify_checks([]), ('pending', []))
+
+    def test_api_sample_is_read(self):
+        sample = json.loads('{"total_count": 2, "check_runs": [{"id": 11, "name": "test (2/6)", "status": "completed", '
+                            '"conclusion": "success", "app": {"slug": "github-actions"}}, {"id": 12, "name": '
+                            '"user-stories", "status": "completed", "conclusion": "failure", "app": {"slug": "github-actions"}}]}')
+        state, bad = D.classify_checks(sample['check_runs'])
+        self.assertEqual((state, [r['id'] for r in bad]), ('red', [12]))
+
+
+class InReviewGuard(unittest.TestCase):
+    HEAD = '0123456789abcdef0123456789abcdef01234567'
+
+    def batch(self, body, branch='claude/batch-20261104', n=900):
+        return {'number': n, 'headRefName': branch, 'body': body}
+
+    def test_full_head_in_a_batch_body_matches(self):
+        prs = [self.batch(f'Batch of three:\n812 {self.HEAD}\n815 {"e" * 40}\n')]
+        self.assertEqual(D.in_review_by(self.HEAD, prs), [900])
+
+    def test_short_head_in_a_group_body_matches(self):
+        prs = [self.batch(f'- #812 at `{self.HEAD[:12]}`', branch='claude/group-sync', n=901)]
+        self.assertEqual(D.in_review_by(self.HEAD, prs), [901])
+
+    def test_other_heads_do_not_match(self):
+        other = 'f' + self.HEAD[1:]
+        prs = [self.batch(f'812 {other}'), self.batch(f'812 {self.HEAD[:6]} only six characters')]
+        self.assertEqual(D.in_review_by(self.HEAD, prs), [])
+
+    def test_head_inside_a_longer_hex_run_does_not_match(self):
+        self.assertEqual(D.in_review_by(self.HEAD, [self.batch('sha256 ' + 'aa' + self.HEAD + 'bb' * 11)]), [])
+
+    def test_only_batch_and_group_branches_count(self):
+        prs = [self.batch(f'{self.HEAD}', branch='fix/other'), self.batch(f'{self.HEAD}', branch='claude/batchy')]
+        self.assertEqual(D.in_review_by(self.HEAD, prs), [])
+
+
 class Drift(unittest.TestCase):
     """The driver's gate constants and the published schema must say the same thing."""
 
@@ -375,6 +442,10 @@ class Drift(unittest.TestCase):
 # end-to-end: real git repos, a fake gh that records calls, a fake gitleaks
 # ---------------------------------------------------------------------------------------------
 
+# A stand-in for the roadmap repo's tools/secret-rules.mjs: one made-up shape, so no fixture here
+# looks like a real credential.
+FAKE_RULES = 'export const PATTERNS = { fake_key: "FAKEKEY_[0-9]{6}" };\n'
+
 FAKE_GH = r'''#!/usr/bin/env python3
 import json, os, sys
 st_path = os.environ['FAKE_GH_STATE']
@@ -393,7 +464,27 @@ def view(pr):
             "headRepositoryOwner": {"login": pr["owner"]}, "reviews": []}
 if a[:2] == ["pr", "list"]:
     br = opt("--head")
-    print(json.dumps([view(p) for p in st["prs"] if p["branch"] == br]))
+    if br is None:  # the in-review guard lists every open PR
+        print(json.dumps(st.get("batches", [])))
+    else:
+        print(json.dumps([view(p) for p in st["prs"] if p["branch"] == br]))
+elif a[0] == "api" and "/check-runs" in a[1]:
+    head = a[1].split("/commits/")[1].split("/")[0]
+    runs = st.get("checks", {}).get(head, [])
+    print(json.dumps({"total_count": len(runs), "check_runs": runs}))
+elif a[:2] == ["run", "view"]:
+    print("step 1 ok\nError: expected 3 to be 4\n" + os.environ.get("FAKE_GH_LOG_EXTRA", ""))
+elif a[:2] == ["pr", "comment"]:  # a repair: the push before it moved the head
+    pr = [p for p in st["prs"] if str(p["number"]) == a[2]][0]
+    pr["head"] = os.environ["FAKE_GH_PUSHED_HEAD"]
+    pr.setdefault("comments", []).append({"body": open(opt("--body-file")).read()})
+    save()
+    print(pr["url"] + "#issuecomment-1")
+elif a[:2] == ["pr", "edit"]:
+    pr = [p for p in st["prs"] if str(p["number"]) == a[2]][0]
+    if "--body-file" in a:
+        pr["body"] = open(opt("--body-file")).read()
+    save()
 elif a[:2] == ["pr", "create"]:
     owner, br = opt("--head").split(":")
     if os.environ.get("FAKE_GH_FAIL_CREATE"):
@@ -429,6 +520,8 @@ class EndToEnd(unittest.TestCase):
         os.makedirs(seed)
         git(['init', '-q', '-b', 'main'], seed)
         put(os.path.join(seed, 'range.ts'), 'export const end = (n) => n - 1\n')
+        os.makedirs(os.path.join(seed, 'tools'))
+        put(os.path.join(seed, 'tools', 'secret-rules.mjs'), FAKE_RULES)
         git(['add', '.'], seed)
         git(['commit', '-qm', 'base'], seed)
         git(['clone', '-q', '--bare', seed, up], t)
@@ -454,10 +547,14 @@ class EndToEnd(unittest.TestCase):
             os.chmod(p, 0o755)
         self.log = os.path.join(t, 'gh.log')
         self.state = os.path.join(t, 'gh.json')
+        self.sd = os.path.join(t, 'state')
+        os.makedirs(self.sd)
         self.env = dict(os.environ, PATH=self.bin + os.pathsep + os.environ['PATH'], GH_FORK_OWNER='me',
                         UPSTREAM_REPO='up/repo', GITLEAKS_BIN=os.path.join(self.bin, 'gitleaks'),
-                        FAKE_GH_LOG=self.log, FAKE_GH_STATE=self.state, FAKE_GH_PUSHED_HEAD=self.head)
-        self.env.pop('ATTRIBUTION', None)
+                        FAKE_GH_LOG=self.log, FAKE_GH_STATE=self.state, FAKE_GH_PUSHED_HEAD=self.head,
+                        WORKDIR=wt, STATE_DIR=self.sd)
+        for k in ('ATTRIBUTION', 'LOCAL_SUITE', 'SHARED_SUITE_PATHS'):
+            self.env.pop(k, None)
 
     def tearDown(self):
         shutil.rmtree(self.t, ignore_errors=True)
@@ -467,8 +564,6 @@ class EndToEnd(unittest.TestCase):
         put(f'{F}/STATE.json', json.dumps({'worktree': self.wt, 'branch': 'fix/range-end', 'head': head}))
         put(f'{F}/pr-title.txt', 'Weekly chart drops the last day\n')
         put(f'{F}/pr-body.md', body)
-        put(f'{F}/suite-head.txt', head + '\n')
-        put(f'{F}/suite.json', json.dumps({'testResults': [{'name': f'{self.wt}/range.test.ts', 'status': 'passed'}]}))
         dig = {n: D.sha256_file(f'{F}/{n}') for n in ('pr-title.txt', 'pr-body.md')}
         put(f'{F}/review-1.json', json.dumps(verdict(head=head, base=self.base, text_sha256=dig)))
 
@@ -570,8 +665,6 @@ class EndToEnd(unittest.TestCase):
         put(f'{d}/comment.md', 'Done: the range end now has a comment.\n')
         if body is not None:
             put(f'{d}/body.md', body)
-        put(f'{d}/suite-head.txt', new + '\n')
-        put(f'{d}/suite.json', json.dumps({'testResults': [{'name': 'range.test.ts', 'status': 'passed'}]}))
         names = [x for x in ('comment.md', 'body.md') if os.path.exists(f'{d}/{x}')]
         dig = {x: D.sha256_file(f'{d}/{x}') for x in names}
         v = verdict(head=new, base=self.base, round=2, scope='delta', previous_head=old, still_open=[],
@@ -606,6 +699,185 @@ class EndToEnd(unittest.TestCase):
         r = self.publish()
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('VERDICT', r.stdout + r.stderr)
+
+    # --- local suite: off by default, optional for shared code
+
+    def test_no_local_suite_by_default(self):
+        self.assertFalse(os.path.exists(f'{self.F}/suite.json'))
+        self.assertEqual(self.publish().returncode, 0)
+
+    def test_shared_mode_needs_the_suite_for_shared_paths(self):
+        r = self.publish(env=dict(self.env, LOCAL_SUITE='shared', SHARED_SUITE_PATHS='range.*'))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('suite has not passed at head', r.stdout + r.stderr)
+        r = self.publish(env=dict(self.env, LOCAL_SUITE='shared', SHARED_SUITE_PATHS='packages/health-core/*merge*'))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_unknown_local_suite_mode_is_refused(self):
+        r = self.publish(env=dict(self.env, LOCAL_SUITE='always'))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('LOCAL_SUITE', r.stdout + r.stderr)
+
+    # --- secret-fixture check: the roadmap repo's own rules, on the added lines
+
+    def commit_line(self, line):
+        put(os.path.join(self.wt, 'range.test.ts'), line + '\n')
+        git(['add', 'range.test.ts'], self.wt)
+        git(['commit', '-qm', 'add a fixture'], self.wt)
+        head = git(['rev-parse', 'HEAD'], self.wt)
+        self.env['FAKE_GH_PUSHED_HEAD'] = head
+        self.write_folder(head=head)
+
+    @unittest.skipUnless(shutil.which('node'), 'node is needed for the secret-fixture check')
+    def test_secret_shaped_fixture_is_refused_by_file_line_and_rule_not_value(self):
+        value = 'FAKEKEY' + '_' + '424242'  # matches the fake rule only; assembled so this file holds no match
+        self.commit_line(f"const token = '{value}'")
+        r = self.publish('--go')
+        out = r.stdout + r.stderr
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('range.test.ts:1 fake_key', out)
+        self.assertNotIn(value, out)
+        self.assertEqual(self.writes(), [])
+        self.assertFalse(self.fork_has_branch())
+
+    @unittest.skipUnless(shutil.which('node'), 'node is needed for the secret-fixture check')
+    def test_plain_fixture_passes_the_secret_check(self):
+        self.commit_line("const token = 'test-token-good'")
+        r = self.publish()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_missing_secret_rules_refuse_rather_than_skip(self):
+        bare = os.path.join(self.t, 'no-rules')
+        os.makedirs(bare)
+        git(['init', '-q'], bare)
+        r = self.publish(env=dict(self.env, WORKDIR=bare))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('secret-rules.mjs is missing', r.stdout + r.stderr)
+
+    def test_unset_workdir_refuses(self):
+        env = dict(self.env)
+        env.pop('WORKDIR')
+        r = self.publish(env=env)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('WORKDIR', r.stdout + r.stderr)
+
+    # --- in-review push guard
+
+    def gh_state(self):
+        with open(self.state) as f:
+            return json.load(f)
+
+    def set_gh_state(self, **kw):
+        st = self.gh_state() if os.path.exists(self.state) else {'prs': []}
+        st.update(kw)
+        put(self.state, json.dumps(st))
+
+    def test_repair_to_a_head_in_brads_review_is_refused(self):
+        d = self.repair_folder()
+        self.set_gh_state(batches=[{'number': 950, 'headRefName': 'claude/batch-20261104',
+                                    'body': f'100 {self.head}\n'}])
+        r = self.repair(d, '--go')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("in Brad's review", r.stdout + r.stderr)
+        self.assertIn('#950', r.stdout + r.stderr)
+        self.assertEqual([c[:2] for c in self.writes()], [['pr', 'create']], 'nothing pushed or posted')
+
+    def test_repair_is_allowed_when_no_batch_names_the_head(self):
+        d = self.repair_folder()
+        self.set_gh_state(batches=[{'number': 950, 'headRefName': 'claude/batch-20261104', 'body': f'100 {"e" * 40}\n'},
+                                   {'number': 951, 'headRefName': 'fix/x', 'body': f'100 {self.head}\n'}])
+        r = self.repair(d)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    # --- the CI gate on the pushed head
+
+    def ci(self, *extra):
+        return sp.run([sys.executable, '-I', DRIVER, 'ci', self.F, '--wait-min', '0', *extra], capture_output=True,
+                      text=True, env=self.env)
+
+    def published(self, body=GOOD_BODY):
+        self.write_folder(body=body)
+        r = self.publish('--go')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return self.ledger()[-1]['number']
+
+    def outbox(self):
+        p = os.path.join(self.sd, 'report-outbox.txt')
+        return text(p) if os.path.exists(p) else ''
+
+    def test_ci_green_writes_ci_green_ledger_and_report_line(self):
+        n = self.published()
+        self.set_gh_state(checks={self.head: [check_run('test (1/6)'), check_run('gitleaks', conclusion='skipped')]})
+        r = self.ci()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(text(f'{self.F}/CI-GREEN').split('\n')[0], self.head)
+        self.assertFalse(os.path.exists(f'{self.F}/CI-PENDING'))
+        self.assertEqual(self.outbox(), f'PR #{n} ready, head {self.head}\n')
+        self.assertEqual([(x['status'], x['head']) for x in lines(os.path.join(self.fixes, 'ci.jsonl'))],
+                         [('green', self.head)])
+        self.assertEqual(self.ci().returncode, 0)
+        self.assertEqual(self.outbox().count('ready'), 1, 'reported once')
+
+    def test_ci_red_writes_failing_jobs_and_never_reports(self):
+        self.published()
+        self.set_gh_state(checks={self.head: [check_run('test (1/6)'),
+                                              check_run('typecheck', conclusion='failure', id=77, app={'slug': 'github-actions'})]})
+        secretish = 'gh' + 'p_' + 'x' * 36  # assembled at run time: no secret shape in this file
+        r = sp.run([sys.executable, '-I', DRIVER, 'ci', self.F, '--wait-min', '0'], capture_output=True, text=True,
+                   env=dict(self.env, FAKE_GH_LOG_EXTRA=f'echo {secretish}'))
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        red = text(f'{self.F}/CI-RED.md')
+        self.assertEqual(red.split('\n')[0], f'CI is red at {self.head}')
+        self.assertIn('typecheck: failure', red)
+        self.assertIn('expected 3 to be 4', red)
+        self.assertNotIn(secretish, red)
+        self.assertNotIn('test (1/6)', red)
+        self.assertEqual(self.outbox(), '')
+        self.assertFalse(os.path.exists(f'{self.F}/CI-GREEN'))
+
+    def test_ci_still_running_is_pending_and_not_reported(self):
+        self.published()
+        self.set_gh_state(checks={self.head: [check_run('test (1/6)', status='in_progress', conclusion=None)]})
+        self.assertEqual(self.ci().returncode, 3)
+        self.assertEqual(text(f'{self.F}/CI-PENDING').split('\n')[0], self.head)
+        self.assertEqual(self.outbox(), '')
+        self.set_gh_state(checks={self.head: [check_run('test (1/6)')]})
+        self.assertEqual(self.ci().returncode, 0)
+        self.assertFalse(os.path.exists(f'{self.F}/CI-PENDING'))
+
+    def test_ci_reads_only_the_pushed_head(self):
+        self.published()
+        self.set_gh_state(checks={'c' * 40: [check_run('test (1/6)')]})
+        self.assertEqual(self.ci().returncode, 3, 'green checks on another commit do not count')
+
+    def test_ci_after_a_repair_push_reads_the_new_head(self):
+        d = self.repair_folder()
+        with open(f'{d}/STATE.json') as f:
+            new = json.load(f)['head']
+        self.env['FAKE_GH_PUSHED_HEAD'] = new
+        r = self.repair(d, '--go')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.set_gh_state(checks={new: [check_run('test (1/6)', conclusion='failure')]})
+        r = sp.run([sys.executable, '-I', DRIVER, 'ci', d, '--wait-min', '0'], capture_output=True, text=True, env=self.env)
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertEqual(text(f'{d}/CI-RED.md').split('\n')[0], f'CI is red at {new}')
+        self.assertEqual(self.outbox(), '')
+
+    def test_ci_needs_a_published_head(self):
+        r = self.ci()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('has not pushed this head', r.stdout + r.stderr)
+
+    def test_ci_fills_the_ci_line_in_the_pr_body(self):
+        body = GOOD_BODY.replace('- **CI** on the pushed head: the loop reports the head only after every check passes.',
+                                 f'- **CI** at `{self.head[:12]}`: pending')
+        n = self.published(body=body)
+        self.set_gh_state(checks={self.head: [check_run('test (1/6)')]})
+        self.assertEqual(self.ci().returncode, 0)
+        pr = [p for p in self.gh_state()['prs'] if p['number'] == n][0]
+        self.assertIn(f'- **CI** at `{self.head[:12]}`: all checks passed ([checks](https://github.com/up/repo/pull/{n}/checks))',
+                      pr['body'])
+        self.assertNotIn('pending', pr['body'])
 
 
 if __name__ == '__main__':

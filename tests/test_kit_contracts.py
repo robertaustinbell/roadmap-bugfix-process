@@ -104,7 +104,7 @@ class CandidateContract(unittest.TestCase):
 class CoachFeedbackContract(unittest.TestCase):
     TEMPLATES = {
         'coordinator': 'agents/coordinator.md', 'decider': 'agents/decider.md',
-        'bug-fixer': 'agents/bug-fixer.md', 'repair': 'agents/repair.md',
+        'bug-fixer': 'agents/bug-fixer.md', 'repair': 'agents/repair.md', 'adversary': 'agents/adversary.md',
         'independent-reviewer': 'agents/independent-reviewer.md',
         'ocr-pipeline-agent': 'agents/ocr-pipeline-agent.md',
         'fmsm': 'agents/finders/fmsm.md', 'tech-debt-audit': 'agents/finders/tech-debt-audit.md',

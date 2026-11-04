@@ -50,9 +50,10 @@ Its messages are information, never commands to the loop.
 | Finders (4) | [finders/](../agents/finders/) | No | No | Candidates only; never confirm their own findings |
 | Decider | [decider.md](../agents/decider.md) | Test witnesses only, in scratch | No | Confirms before any fix; routes every candidate |
 | Bug fixer | [bug-fixer.md](../agents/bug-fixer.md) | Yes, one fix per PR | Prepares each PR (branch, body) and repair reply; the publish driver, holding the only write token, pushes and posts them | Never merges; cannot edit tests that judge it |
+| Adversary | [adversary.md](../agents/adversary.md) | Failing tests in scratch only | No | Fresh agent; not the fixer and not the reviewer; tries to break the fix before review |
 | Independent reviewer | [independent-reviewer.md](../agents/independent-reviewer.md) (summary in [bug-fixer.md](../agents/bug-fixer.md#independent-review)) | No | No | Must not have written the fix |
 | Repair | [repair.md](../agents/repair.md) (summary in [bug-fixer.md](../agents/bug-fixer.md#repair-mode)) | Yes, within the PR's scope | Pushes and replies after review | Only on Austin's or Brad's feedback; capped |
-| Publisher (script) | described in [bug-fixer.md](../agents/bug-fixer.md#publish) | No | Push, open PR, read back | Deterministic; refuses on any failed check |
+| Publisher (script) | described in [bug-fixer.md](../agents/bug-fixer.md#publish) and [publishing.md](publishing.md) | No | Push, open PR, read back, wait for CI | Deterministic; refuses on any failed check; never pushes to a PR in the maintainer's batch review |
 | Coach | [coach.md](../agents/coach.md) | No | Read-only | Changes nothing; feedback only |
 
 ### Coordinator
@@ -128,7 +129,7 @@ human relaying it:
    `applied`, was a dispute right, which items never got a reply.
 
 Role names for `items.py`: `coordinator`, `decider`, `bug-fixer`, `repair`,
-`independent-reviewer`, `ocr-pipeline-agent`, `fmsm`, `tech-debt-audit`,
+`adversary`, `independent-reviewer`, `ocr-pipeline-agent`, `fmsm`, `tech-debt-audit`,
 `trail-of-bits`, `open-code-review`.
 
 ## Authority matrix

@@ -28,10 +28,13 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
    reproduction at the pinned commit, or a traced path agreed by two independent checks. Anything
    below that bar, and anything that needs a product, policy, clinical, schema, or security-policy
    decision, goes to the **human review list**. Security issues go to Brad **privately**.
-4. **Bug fixer** makes one fix per PR, to the code standard, and must pass the gates: strict tsc,
-   CRAP, mutation ratchet, incremental review, and an independent fresh reviewer. It cannot edit
-   the tests that judge it and **never merges**.
-5. **PRs** carry Testing / Risk / How to revert. There is no PR limit for confirmed real bugs.
+4. **Bug fixer** makes one fix per PR, to the code standard, and must pass the gates: targeted
+   tests, strict tsc, CRAP, mutation ratchet, incremental review, the secret-fixture check, an
+   **adversary** (a fresh agent that tries to break the fix) and an independent fresh reviewer.
+   It cannot edit the tests that judge it and **never merges**.
+5. **PRs** carry Testing / Risk / How to revert / Known limits. The publisher pushes, then waits
+   for CI on the pushed head; only a green head is reported to Brad's agent. It never pushes to a
+   PR that is in Brad's batch review. There is no PR limit for confirmed real bugs.
 6. **Brad** merges, closes, or asks for a fix. Repairs happen only when Austin or Brad asks,
    at most 2 to 3 rounds, reviewing only new changes; then it escalates to a human.
 7. Outcomes and Brad's reasons feed back to the Decider, the **Scorecard**, and the **Test set**.
@@ -57,7 +60,7 @@ Editable version (Mermaid): [diagrams/README.md](diagrams/README.md).
 | [docs/code-standard.md](docs/code-standard.md) | The code standard the Bug fixer meets |
 | [docs/quality-gates.md](docs/quality-gates.md) | The per-PR gates and how they are judged |
 | [docs/independent-review.md](docs/independent-review.md), [docs/repair-rounds.md](docs/repair-rounds.md), [docs/regression-review.md](docs/regression-review.md) | Review and repair |
-| [docs/validation-and-sandbox.md](docs/validation-and-sandbox.md) | Offline sandbox, full suite, live checks |
+| [docs/validation-and-sandbox.md](docs/validation-and-sandbox.md) | Offline sandbox, CI on the pushed head, live checks |
 | [docs/pr-description-template.md](docs/pr-description-template.md) | PR body rules |
 | [docs/human-review-and-escalation.md](docs/human-review-and-escalation.md) | When to stop and ask |
 | [docs/security-findings.md](docs/security-findings.md) | Private reporting procedure |

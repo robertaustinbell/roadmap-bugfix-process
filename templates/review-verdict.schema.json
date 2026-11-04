@@ -137,6 +137,10 @@
         "no_owner_decision_made": {
           "$ref": "#/$defs/checkState"
         },
+        "adversary_residuals_in_ac": {
+          "description": "adversary.md exists for this head and every residual it lists appears in the AC text and the PR body's Known limits line.",
+          "$ref": "#/$defs/checkState"
+        },
         "reverted_changes_detected": {
           "description": "Per production change: which tests failed when it was reverted.",
           "type": "array",

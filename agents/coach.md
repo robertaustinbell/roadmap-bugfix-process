@@ -53,7 +53,7 @@ reads the open items addressed to it at the start of its next run.
  "check": "<how you will tell at your next run whether it helped>"}
 ```
 
-- `to` is one role: `coordinator`, `decider`, `bug-fixer`, `repair`,
+- `to` is one role: `coordinator`, `decider`, `bug-fixer`, `repair`, `adversary`,
   `independent-reviewer`, `ocr-pipeline-agent`, or a finder (`fmsm`,
   `tech-debt-audit`, `trail-of-bits`, `open-code-review`).
 - A suggestion is something the role can do inside its own next run, within its

@@ -169,8 +169,8 @@ tier. The exact path list is a human-owned file.
 
 ## 4. Per-PR gates
 
-Every loop PR passes all of these at its **final head** before it is published. If
-the head moves, the gates run again. The step-by-step procedure and receipt format
+Every loop PR passes items 1 to 8 at its **final head** before it is published, and
+item 9 after the push. If the head moves, the gates run again. The step-by-step procedure and receipt format
 are in [quality-gates.md](quality-gates.md); the PR body template is in
 [pr-description-template.md](pr-description-template.md).
 
@@ -194,15 +194,32 @@ are in [quality-gates.md](quality-gates.md); the PR body template is in
    with a confirmed Medium-or-worse problem the diff introduces or worsens. Record
    per-dimension direction (better / same / worse) for each touched dimension. A
    touched dimension that gets worse holds the PR for human review.
-5. **Full test suite** at the exact head, with `TZ=UTC` and CI's Node version,
-   compared with an untouched baseline at the same base (compare failing sets, not
-   against zero). Run suites one at a time. A lone failure in an untouched file is
-   rerun alone on both head and base before it is called load or flake; report it
-   honestly, never as green.
-6. **Secret scan** with the version CI pins, on the head, before push. Fix a false
-   hit by renaming the identifier, never by allowlisting.
-7. **Independent review** approves the current head (see
+5. **Targeted tests** at the exact head, with `TZ=UTC`, CI's Node version and
+   `--maxWorkers=1` or `2`: the PR's own tests, every test file that imports a changed
+   module, every test file that names a changed file (a text search; some tests read
+   files by name), and the user-stories tests. Count the files first; never run an
+   empty list (an empty list runs the whole suite). Typechecks for every project the
+   change touches (widget-src, health-core, server, engine).
+6. **Secret scan** with the version CI pins, on the head, before push, and the
+   **secret-fixture check**: the roadmap repo's own credential shapes
+   (`tools/secret-rules.mjs`, the rules `tools/merge-batch.mjs` pre-flight uses) on the
+   lines the change adds. Any hit blocks. Test values are plain strings such as
+   `test-token-good`, never `ghp_`, `github_pat_`, `sk-...` or `"Key..."`-shaped. Fix a
+   false hit by renaming the identifier, never by allowlisting.
+7. **Adversarial pass**: a fresh agent that did not write the fix and is not its
+   reviewer tries to break it against the roadmap repo's `docs/review-format.md`
+   ([adversary.md](../agents/adversary.md)). Blocking findings go back to the fixer.
+   Residuals are written into the AC text and the PR body's **Known limits** line, so
+   no AC promises more than the code does.
+8. **Independent review** approves the current head (see
    [bug-fixer.md](../agents/bug-fixer.md#independent-review)).
+9. **CI on the pushed head.** The maintainer's CI runs the whole suite (in shards),
+   typechecks, builds, gitleaks, the dependency audit and the user-stories check on
+   every push. The publisher waits for every check run on the exact pushed head. All
+   passed: the head is reported to the maintainer's agent as ready. Any failure: the
+   PR goes back to repair and is never reported. A local full suite is not a gate; the
+   operator can turn it on only for shared record, sync and storage code
+   (`LOCAL_SUITE=shared`).
 
 Duplication (`dryer`) is not part of the per-PR gates yet.
 
@@ -212,7 +229,11 @@ Read these live in the roadmap repo; summarised here so a fixer knows to look.
 
 - **Lane A (bug fix):** name the violated user-story acceptance criterion (add one
   with the next free number or a letter suffix if missing), failing test citing the
-  story ID, smallest production change, regenerate the stories HTML, `test:all`.
+  story ID, smallest production change. Edit `docs/user-stories.md` only; never edit,
+  regenerate or commit `docs/user-stories.html` (it is not tracked on `main`; the Pages
+  build makes it). Never drop or renumber a story or AC the base defines: CI refuses a
+  change that drops a base story. A new AC takes the next number free on `main`,
+  checked again right before the PR opens. The PR starts from a fresh `upstream/main`.
 - **Lane B (feature, schema, merge, clinical text):** needs Brad's agreement before
   code. The loop routes these to `question` or `human-review`, never `fix`.
 - **Clinical sources stay in sync** (algorithm doc, evidence file, roadmap text) or
@@ -234,8 +255,9 @@ Every loop PR body has these sections, in this order:
 4. **How to reproduce** (one command that fails on unfixed `main` and passes after).
 5. **Testing**: the failing test or reproduction first, then the gates passed (tsc,
    CRAP before→after, changed-line mutants killed/total, FMSM incremental result,
-   full suite passed/skipped/failed vs baseline at the same base). Anything not run
-   says "did not run" and why.
+   targeted tests passed/skipped/failed), then `CI at <head>: all checks passed (link)`,
+   filled in after CI, and a **Known limits** line that matches the AC residuals.
+   Anything not run says "did not run" and why.
 6. **Risk**: low / medium / high, set by what the change touches (see
    [evidence-bar.md](evidence-bar.md#severity-and-risk)), with one line of reason.
 7. **How to revert**: the exact revert (for example `git revert <sha>`) and anything

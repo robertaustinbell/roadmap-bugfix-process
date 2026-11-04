@@ -41,7 +41,7 @@ def _loop_settings():
 _loop_settings()
 
 VERBS = ('applied', 'not_applied', 'disputed')
-ROLES = ('coordinator', 'decider', 'bug-fixer', 'repair', 'independent-reviewer', 'ocr-pipeline-agent',
+ROLES = ('coordinator', 'decider', 'bug-fixer', 'repair', 'adversary', 'independent-reviewer', 'ocr-pipeline-agent',
          'fmsm', 'tech-debt-audit', 'trail-of-bits', 'open-code-review')
 
 

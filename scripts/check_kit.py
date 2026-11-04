@@ -68,7 +68,7 @@ RULES = [
     ('docs/independent-review.md', 'Where the verdict lives (and where it must not)', 'Never post a `VERDICT:` line on GitHub'),
 ]
 
-TEXT_EXT = {'.example', '.md', '.py', '.json', '.txt', '.csv', '.css', '.tsx', '.ts', '.js', '.yml', '.yaml', '.toml', ''}
+TEXT_EXT = {'.example', '.md', '.py', '.json', '.txt', '.csv', '.css', '.tsx', '.ts', '.js', '.mjs', '.yml', '.yaml', '.toml', ''}
 BINARY_OK = {'.png', '.mp4', '.jpg', '.jpeg', '.gif', '.svg', '.pdf'}
 
 
