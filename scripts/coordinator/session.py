@@ -50,6 +50,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import subprocess as sp
 import sys
 import time
@@ -199,6 +200,37 @@ def coordinator_working():
         return False
 
 
+TALK_KINDS = ['start', 'proposal', 'agreed', 'request', 'plan-notice', 'question', 'answer', 'stop',
+              'kit-approval']
+HR_ID = re.compile(r'^HR-[A-Za-z0-9-]+$')
+
+
+def talk(sd, who, name, kind, words, **extra):
+    """One line in owner-talk.jsonl, which the Coach reads."""
+    with open(os.path.join(sd, 'owner-talk.jsonl'), 'a') as f:
+        f.write(json.dumps({'at': now_iso(), 'who': who, 'name': name, 'kind': kind, 'text': words, **extra}) + '\n')
+
+
+def answers(sd):
+    """Owner answers to human-review items, latest per item, with whether a Decider used them."""
+    out = {}
+    p = os.path.join(sd, 'answers.jsonl')
+    if os.path.exists(p):
+        with open(p) as f:
+            for n, ln in enumerate(f, 1):
+                if not ln.strip():
+                    continue
+                try:
+                    r = json.loads(ln)
+                except ValueError:
+                    sys.exit(f'session.py: {p}:{n} is damaged; repair it by hand')
+                if r.get('used_in'):
+                    out.setdefault(r['item'], {})['used_in'] = r['used_in']
+                else:
+                    out[r['item']] = r
+    return out
+
+
 def main(argv):
     ap = argparse.ArgumentParser(prog='session.py', description=(__doc__ or '').split('\n')[0])
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -223,7 +255,20 @@ def main(argv):
     pr.add_argument('n', type=int)
     ro = sub.add_parser('round-opened')
     ro.add_argument('round')
-    for name in ('may-open-round', 'gate', 'status'):
+    sy = sub.add_parser('say')
+    sy.add_argument('--who', required=True, choices=['owner', 'coordinator'])
+    sy.add_argument('--name', required=True)
+    sy.add_argument('--kind', required=True, choices=TALK_KINDS)
+    sy.add_argument('--words', required=True)
+    an = sub.add_parser('answer')
+    an.add_argument('item')
+    an.add_argument('--by', required=True)
+    an.add_argument('--choice', default='')
+    an.add_argument('--words', required=True)
+    au = sub.add_parser('answer-used')
+    au.add_argument('item')
+    au.add_argument('--round', required=True)
+    for name in ('may-open-round', 'gate', 'status', 'answers'):
         sub.add_parser(name)
     a = ap.parse_args(argv)
 
@@ -312,6 +357,35 @@ def main(argv):
             if not s or not (active(s) or s.get('awaiting_prs', 0) > 0):
                 return 1
             return 1 if coordinator_working() else 0
+        elif a.cmd == 'say':
+            if a.who == 'owner':
+                check_owner(a.name)
+            if not a.words.strip():
+                sys.exit('session.py: --words must hold the exact words')
+            talk(sd, a.who, a.name.lower(), a.kind, a.words)
+            pulse()
+            print('logged')
+        elif a.cmd == 'answer':
+            check_owner(a.by)
+            if not HR_ID.match(a.item):
+                sys.exit('session.py: the item must be a human-review id like HR-20261103-1')
+            if not a.words.strip():
+                sys.exit('session.py: --words must hold the answer verbatim (Brad\'s words if it is his answer)')
+            rec = {'at': now_iso(), 'item': a.item, 'by': a.by.lower(), 'choice': a.choice, 'words': a.words}
+            with open(os.path.join(sd, 'answers.jsonl'), 'a') as f:
+                f.write(json.dumps(rec) + '\n')
+            talk(sd, 'owner', a.by.lower(), 'answer', a.words, item=a.item, choice=a.choice)
+            pulse()
+            print(f'answer to {a.item} recorded; the next Decider run re-routes it')
+        elif a.cmd == 'answers':
+            print(json.dumps([r for r in answers(sd).values() if 'words' in r and not r.get('used_in')], indent=2))
+        elif a.cmd == 'answer-used':
+            got = answers(sd).get(a.item)
+            if not got or 'words' not in got:
+                sys.exit(f'session.py: no answer recorded for {a.item}')
+            with open(os.path.join(sd, 'answers.jsonl'), 'a') as f:
+                f.write(json.dumps({'at': now_iso(), 'item': a.item, 'used_in': a.round}) + '\n')
+            print(f'{a.item} marked used in {a.round}')
         elif a.cmd == 'status':
             if s and expired(s):
                 s = dict(s, status='expired', expired_reason=expired(s))

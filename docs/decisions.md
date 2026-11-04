@@ -5,6 +5,24 @@ Each entry names the decision it feeds and its removal condition, per
 [adding a rule, a field or a gate](scorecard-and-test-set.md#adding-a-rule-a-field-or-a-gate).
 Rules live in their own pages; this page records why they are there.
 
+## 2026-11-03: fixes from a trial run of the skill in Claude
+
+A second review, with a trial run of the skill on lab-value code, found that several limits
+`roles.md` called "enforced by tools" were enforced by prompts only. Each point was checked
+against the code; all held.
+
+| Change | Why | Undo when |
+|---|---|---|
+| `loop.py run-role` starts each role as its own process: environment from an allow-list, gh signed out, git credential helpers and the system git config off, github.com push URLs rewritten to fail, every start recorded in `dispatch.json` | In-session subagents and `claude -p` inherited `GH_TOKEN`, `GITHUB_TOKEN` and gh's login | Roles run under a separate user or container that enforces more |
+| The suite gets an allow-listed environment with a throwaway `HOME` and no SSH agent socket; docs say plainly that the container is not wired in | Removing variables by name left `HOME` and `SSH_AUTH_SOCK`, so suite code could read gh and SSH credentials | The driver runs the suite in the container |
+| `MAINTAINER_LOGINS` is required for `addressed`; a closed PR counts only if a listed maintainer closed it | Any passer-by's comment, or the loop's own close, opened the next round | Never removed |
+| The skill pins the approved kit (`kit_ref`, a tag or full SHA); any other kit commit needs the owner's logged yes | The skill ran whatever `main` held, and the kit steers an agent that can open PRs | Never removed |
+| Finders write to private folders outside the state folder; output moves in when they exit | The Trail of Bits finder read FMSM's notes, so two "independent" sources were one | OS-level isolation exists |
+| `loop.py reconcile` runs at the start gate and in preflight: open PRs from the fork account that no round opened and no owner adopted stop the round | A new state folder skipped the gate while 44 loop PRs were open | Never removed |
+| `loop.py preflight` lists everything a run needs before it starts, including `COACH_CMD`; a round with no Coach feedback closes `partial` | Missing npm, gitleaks, gh login, `COACH_CMD` and finder tools surfaced mid-run | Never removed |
+| Stand-in runners count for routing only; the Bug fixer re-runs the witness under the real runner and only that is `red_at_base` | The evidence bar did not say | Never removed |
+| `session.py answer`, `answers`, `answer-used`, and `say` for owner talk | A manual pass could only end at questions | Never removed |
+
 ## 2026-11-03: fixes from an outside review
 
 An outside review of the kit raised eight points. Each was checked against the code; all held.

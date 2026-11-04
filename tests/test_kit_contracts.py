@@ -166,6 +166,7 @@ class SkillIsPortable(unittest.TestCase):
     def test_the_skill_starts_the_coordinator_watched_and_keeps_the_nevers(self):
         md = text(self.SKILL)
         for needle in ('agents/coordinator.md', 'watch.py begin coordinator', 'session.py start',
+                       'loop.py preflight', 'loop.py run-role', 'KIT_REF', '--kind kit-approval',
                        'Never merge', 'One fix per PR', 'VERDICT:', 'own agent with a fresh context'):
             with self.subTest(needle):
                 self.assertIn(needle, md)
@@ -179,8 +180,9 @@ class SkillIsPortable(unittest.TestCase):
             return self.ck.check_skills(d, [rel])
 
     def test_checker_rejects_what_either_runtime_would_reject(self):
-        ok = '---\nname: demo-skill\ndescription: Short.\n---\n\nBody\n'
+        ok = '---\nname: demo-skill\ndescription: Short.\nmetadata:\n  kit_ref: "v1.2.3"\n---\n\nBody\n'
         self.assertEqual(self.check_text(ok), [])
+        self.assertEqual(self.check_text(ok.replace('v1.2.3', 'a' * 40)), [])
         bad = {
             'non-standard field': ok.replace('description:', 'version: 1\ndescription:'),
             'name/folder mismatch': ok.replace('name: demo-skill', 'name: other-skill'),
@@ -188,6 +190,9 @@ class SkillIsPortable(unittest.TestCase):
             'long first sentence': ok.replace('Short.', 'x' * 61 + '. Then more.'),
             'description over 1024': ok.replace('Short.', 'Short. ' + 'x' * 1020),
             'nested metadata': ok.replace('---\n\nBody', 'metadata:\n  hermes: [a, b]\n---\n\nBody'),
+            'no approved kit': ok.replace('  kit_ref: "v1.2.3"\n', '  other: "x"\n'),
+            'kit_ref is a branch': ok.replace('v1.2.3', 'main'),
+            'kit_ref is a short sha': ok.replace('v1.2.3', 'abc1234'),
             'link out of the folder': ok.replace('Body', 'See [x](../../docs/process.md)'),
             'leading blank line': '\n' + ok,
             'empty body': '---\nname: demo-skill\ndescription: Short.\n---\n',

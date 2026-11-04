@@ -40,7 +40,11 @@ MUTATIONS = [
     ('adopt an existing PR', '    prior = existing_pr(branch)', '    prior = None'),
     ('attempted before writing', "    ledger_append(ledger, dict(rec, status='attempted'))", '    pass'),
     ('already published', "need(not ledger_has(ledger, 'branch', branch),", "need(True,"),
-    ('secrets kept from the suite', 'if not SECRET_NAME.search(k)}', '}'),
+    ('suite keeps only listed variables', 'env = {k: base[k] for k in SUITE_KEEP if k in base}', 'env = dict(base)'),
+    ('suite gets a throwaway HOME', "               HOME=home, TMPDIR", "               TMPDIR"),
+    ('maintainer logins required', "    need(maint, 'MAINTAINER_LOGINS is not set", "    need(True, 'MAINTAINER_LOGINS is not set"),
+    ('only listed maintainers count', '        return login in maint\n', '        return True\n'),
+    ('who closed it must count', '            if counts(who):\n', '            if True:\n'),
     ('placeholders in the body', '    if holes:\n', '    if False:\n'),
 ]
 

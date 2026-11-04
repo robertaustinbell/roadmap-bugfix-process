@@ -70,6 +70,13 @@
         "drop"
       ]
     },
+    "witness_runner": {
+      "description": "real: the repo's own runner. stand-in: substitutes were used; counts for routing only, and the Bug fixer re-runs the witness under the real runner.",
+      "enum": [
+        "real",
+        "stand-in"
+      ]
+    },
     "evidence_level": {
       "type": "string",
       "enum": [

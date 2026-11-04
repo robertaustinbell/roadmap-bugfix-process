@@ -276,6 +276,8 @@ def check_skills(root, files):
         meta = fm.get('metadata', {})
         if not isinstance(meta, dict) or any(not isinstance(v, str) or not v for v in meta.values()):
             problems.append(f'{f}: metadata must map keys to plain strings')
+        elif not re.fullmatch(r'[0-9a-f]{40}|v\d+\.\d+\.\d+', str(meta.get('kit_ref', ''))):
+            problems.append(f'{f}: metadata.kit_ref must name the approved kit as a full commit SHA or a vX.Y.Z tag')
         body = active(text)
         for m in re.finditer(r'\]\(([^)#\s]+)', body):
             dest = m.group(1)

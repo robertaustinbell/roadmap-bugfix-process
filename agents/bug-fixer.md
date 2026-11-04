@@ -59,7 +59,9 @@ their new location in the repo.
    dependency install (`npm ci --ignore-scripts`; never symlink `node_modules`). Use
    CI's Node version and `TZ=UTC`.
 2. **Re-confirm.** Place the frozen witness at its `test_file` path; check its
-   SHA-256 matches. Run it on unfixed code. It must fail on the asserted claim. If it
+   SHA-256 matches. Run it on unfixed code **under the repo's real test runner**, even if
+   the Decider used stand-ins (`witness_runner: "stand-in"`); only this run counts as
+   `red_at_base`. It must fail on the asserted claim. If it
    passes, write `NOT-REPRODUCED.md` (measurements, `main` SHA, whether Brad's own
    commit fixed it) and stop.
 3. **Check for a recorded decision.** Search the story text and `git log --grep` for

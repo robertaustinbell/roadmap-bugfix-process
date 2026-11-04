@@ -51,8 +51,9 @@ Configuration (env vars):
   SUITE_TIMEOUT_MIN default 45; SUITE_MAX_WORKERS default 4
   GITLEAKS_BIN      default "gitleaks" on PATH; missing gitleaks refuses (fails closed)
   KEEP_AWAKE        command prefix for the suite, e.g. "caffeinate -ims" (default: that if available)
-  MAINTAINER_LOGINS comma-separated logins whose actions count for `addressed` (default: any non-bot,
-                    non-GH_FORK_OWNER account)
+  MAINTAINER_LOGINS required for `addressed`: comma-separated logins whose review, comment or
+                    close counts. There is no default: an unset list would let any passer-by's
+                    comment open the next round
   ALLOW_FORCE_WITH_LEASE  set to 1 to let `repair` replace an amended commit; default is fast-forward only
 """
 import datetime
@@ -101,18 +102,35 @@ GITLEAKS = os.environ.get('GITLEAKS_BIN', 'gitleaks')
 _ka = os.environ.get('KEEP_AWAKE')
 KEEP_AWAKE = shlex.split(_ka) if _ka is not None else (['caffeinate', '-ims'] if shutil.which('caffeinate') else [])
 SECRET_NAME = re.compile(r'TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|PRIVATE_KEY|CREDENTIAL|^GH_|^GITHUB_|^AWS_', re.I)
+# The only variables the suite inherits. Everything else (tokens, SSH_AUTH_SOCK, HOME, cloud
+# credentials, agent settings) is left behind, so nothing has to be named to be removed.
+SUITE_KEEP = ('PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM')
 
 
-def suite_env(base):
-    """Environment for the target repo's test suite. The suite runs code from the repo under review,
-    so it gets no push token, API key or other secret from our environment."""
+def suite_env(base, home):
+    """Environment for the target repo's test suite. The suite runs code from the repo under review
+    as our user, so it gets only SUITE_KEEP plus a throwaway HOME: no push token, no SSH agent, and
+    no path to ~/.config/gh, ~/.ssh or ~/.npmrc. What this does not stop: code that opens files by
+    absolute path, the macOS keychain, or the network. The container in
+    docs/validation-and-sandbox.md stops those; this driver does not use it yet."""
     _path = [p for p in (base.get('NODE_BIN_DIR'), base.get('EXTRA_PATH')) if p]
-    env = {k: v for k, v in base.items() if not SECRET_NAME.search(k)}
-    env.update(PATH=':'.join(_path + [base.get('PATH', '')]), TZ='UTC', CI='1')
+    env = {k: base[k] for k in SUITE_KEEP if k in base}
+    env.update(PATH=':'.join(_path + [base.get('PATH', '')]), TZ='UTC', CI='1',
+               HOME=home, TMPDIR=os.path.join(home, 'tmp'), XDG_CONFIG_HOME=os.path.join(home, '.config'),
+               XDG_CACHE_HOME=os.path.join(home, '.cache'))
+    os.makedirs(env['TMPDIR'], exist_ok=True)
     return env
 
 
-ENV = suite_env(os.environ)
+_ENV = {}
+
+
+def suite_environment():
+    """One throwaway HOME per driver process, created on first use."""
+    if not _ENV:
+        import tempfile
+        _ENV.update(suite_env(os.environ, tempfile.mkdtemp(prefix='suite-home-')))
+    return _ENV
 VITEST = ['node', 'node_modules/vitest/vitest.mjs', 'run']
 SELF = os.path.abspath(__file__)
 TEMPLATES = os.path.join(os.path.dirname(SELF), '..', '..', 'templates')
@@ -585,18 +603,30 @@ def addressed(ledgers):
                 if n and n not in nums:
                     nums.append(n)
     maint = set(filter(None, os.environ.get('MAINTAINER_LOGINS', '').split(',')))
+    need(maint, 'MAINTAINER_LOGINS is not set: without it any passer-by would count as the maintainer')
 
     def counts(login):
         if not login or login == FORK_OWNER or login.endswith('[bot]') or login in ('github-actions', 'claude'):
             return False  # CI, bots and our own account never count
-        return not maint or login in maint
+        return login in maint
+
+    def closer(n):
+        out = run(['gh', 'api', f'repos/{UP}/issues/{n}/events', '--paginate', '-q',
+                   '.[] | select(.event == "closed") | .actor.login'])
+        return (out.split() or [''])[-1]
 
     pending = []
     for n in nums:
         v = json.loads(run(['gh', 'pr', 'view', str(n), '-R', UP, '--json', 'state,reviews,comments']))
         why = []
-        if v['state'] in ('MERGED', 'CLOSED'):
-            why.append(v['state'].lower())  # check who closed it if our own account might have
+        if v['state'] == 'MERGED':
+            why.append('merged')  # only an account with write access can merge; ours has none
+        elif v['state'] == 'CLOSED':
+            who = closer(n)
+            if counts(who):
+                why.append(f'closed by {who}')
+            else:
+                print(f'#{n}: closed by {who or "unknown"}, which does not count')
         why += [f"review by {r['author']['login']}" for r in v['reviews'] if counts(r['author']['login'])]
         why += [f"comment by {c['author']['login']}" for c in v['comments'] if counts(c['author']['login'])]
         print(f"#{n}: {'addressed (' + why[0] + ')' if why else 'NOT addressed'}")
@@ -658,7 +688,7 @@ def loop(R, NEWDIR):
             if os.path.exists(f'{d}/suite.json'):
                 os.rename(f'{d}/suite.json', f'{d}/suite-prev.json')
             pr = sp.Popen(KEEP_AWAKE + VITEST + ['--reporter=json', f'--outputFile={d}/suite.json', f'--maxWorkers={MAX_WORKERS}'],
-                          cwd=wt, env=ENV, stdout=o, stderr=sp.STDOUT, start_new_session=True)
+                          cwd=wt, env=suite_environment(), stdout=o, stderr=sp.STDOUT, start_new_session=True)
             try:
                 pr.wait(timeout=SUITE_TIMEOUT)
             except sp.TimeoutExpired:
@@ -713,7 +743,7 @@ def loop(R, NEWDIR):
             real = [f for f in fl if f not in KNOWN]
             if real:
                 # Rerun the failing files alone: still failing = real, refuse now instead of a second full run.
-                solo = {f: sp.run(VITEST + [f], cwd=wt, env=ENV, capture_output=True, text=True) for f in real}
+                solo = {f: sp.run(VITEST + [f], cwd=wt, env=suite_environment(), capture_output=True, text=True) for f in real}
                 hard = [f for f, r in solo.items() if r.returncode]
                 if hard:
                     refuse(d, 'Real failures (fail again when run alone): ' + ', '.join(hard) + '\n\n'
@@ -725,7 +755,7 @@ def loop(R, NEWDIR):
             for f in fl:
                 lg = f'{d}/rerun-{os.path.basename(f)}.log'
                 for attempt in range(3):  # known flaky files: up to 3 solo tries; publish still needs a passing log
-                    r = sp.run(VITEST + [f], cwd=wt, env=ENV, capture_output=True, text=True)
+                    r = sp.run(VITEST + [f], cwd=wt, env=suite_environment(), capture_output=True, text=True)
                     with open(lg, 'w') as o:
                         o.write(st['head'] + '\n' + r.stdout + r.stderr)
                     log(f'{os.path.basename(d)} rerun {f} try {attempt + 1}: rc={r.returncode}')

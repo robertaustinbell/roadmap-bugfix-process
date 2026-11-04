@@ -103,8 +103,9 @@ whoever else is available as the human reviewer. Nothing here requires Austin's 
 
 [`skills/roadmap-bugfix-loop/`](skills/roadmap-bugfix-loop/SKILL.md) is an
 [Agent Skills](https://agentskills.io/specification) skill that starts the loop correctly: it gets
-the kit, records its version, checks no other copy is running, starts the Coordinator watched by
-the Coach, and repeats the hard nevers. Everything else stays in this repo; the skill points here.
+the approved kit release (`kit_ref`; any other kit commit needs the owner's yes), runs the start
+checks (`scripts/loop.py preflight`), checks no other copy is running, starts the Coordinator
+watched by the Coach, starts every role through `loop.py run-role`, and repeats the hard nevers. Everything else stays in this repo; the skill points here.
 
 | Runtime | Install |
 |---|---|

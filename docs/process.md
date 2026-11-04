@@ -462,7 +462,9 @@ $STATE_DIR/
   activity/                # scripts/coach/watch.py: who is working, last activity, Coach pid
   session.json             # scripts/coordinator/session.py: mode, scope, owner's words, status
   requests.jsonl           # owner requests during a session, and which round took each
-  owner-talk.jsonl         # every exchange between the owner and the Coordinator
+  owner-talk.jsonl         # every exchange between the owner and the Coordinator (session.py say)
+  answers.jsonl            # owner answers to human-review items, and which round used them
+  prs.jsonl                # every loop PR this state folder opened or the owner adopted (loop.py)
 ```
 
 `$WORKDIR` is the clone of the roadmap repo (or its fork). Every agent works in its

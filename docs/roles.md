@@ -151,11 +151,16 @@ Role names for `items.py`: `coordinator`, `decider`, `bug-fixer`, `repair`,
 
 A rule written only in a prompt holds until the agent misreads it, or until the tool list the
 agent was shown differs from the one it actually got. The limits that matter most are enforced by
-what each process can reach:
+what each process can reach. The last column says honestly how far that goes today: every role
+runs as the operator's own user, so anything a process can open by absolute path (files under
+`HOME`, the macOS keychain) is out of reach only by prompt. A separate user account or a
+container would close that; the kit does not set one up yet.
 
 | Role | Credentials it gets | Enforced how |
 |---|---|---|
-| Finders, Decider, Bug fixer, Repair, Coach | No GitHub write token. Read access to the fork and upstream only | Their processes start with an environment that has no push token. The publish driver also strips secrets from the suite's environment |
+| Finders, Decider, Bug fixer, Repair, Coach | No GitHub write token. Read access to the fork and upstream only | Started with `loop.py run-role`: environment from an allow-list (no token, no SSH agent socket), gh signed out, git credential helpers off, github.com push URLs rewritten to fail; recorded in `dispatch.json` (tested). A subagent started inside the Coordinator's own session (Task tool, `delegate_task`) shares its credentials: prompt-only |
+| Finders, toward each other | None | Each writes to a private folder outside the state folder with its own `known.json`; output moves into `findings/<id>/` when it exits. Reading another finder's output is forbidden by prompt; the private folder only removes the known path |
+| The repo's test suite (run by the publish driver) | None | Environment from an allow-list with a throwaway `HOME`, no SSH agent socket (tested). Not stopped: absolute paths, the keychain, the network. The container in [validation-and-sandbox.md](validation-and-sandbox.md) would stop those; the driver does not use it yet |
 | Independent reviewer | None | Runs in a read-only worktree, or the operator compares the tree before and after; any change voids the review |
 | Publisher (script) | A token that can push to the fork and open PRs, and **cannot merge** on upstream | Check that the account has no write, maintain or admin role on upstream (a fork contributor has none by default) and that the token is scoped to the fork. The driver has no merge command |
 | Coach | Read-only on state | Its output folders (`coach/`, `rounds/<round>/coach/`) are the only places it can write. Roles write their replies to `coach-responses.jsonl`, which the Coach only reads |

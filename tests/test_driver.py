@@ -7,6 +7,8 @@ Every gate has a hostile case here. A gate that no test can tell apart from "alw
 ceremony; scripts/mutation_check.py removes each gate in turn and expects this file to fail.
 """
 import ast
+import contextlib
+import io
 import importlib.util
 import json
 import os
@@ -261,10 +263,84 @@ class Artifacts(unittest.TestCase):
 
 
 class SuiteEnv(unittest.TestCase):
-    def test_tokens_are_removed(self):
-        env = D.suite_env({'PATH': '/bin', 'HOME': '/h', 'GH_TOKEN': 'x', 'GITHUB_TOKEN': 'x',
-                           'OPENAI_API_KEY': 'x', 'MY_SECRET': 'x', 'NPM_TOKEN': 'x', 'AWS_ACCESS_KEY_ID': 'x'})
-        self.assertEqual(sorted(k for k in env if k not in ('TZ', 'CI')), ['HOME', 'PATH'])
+    def env(self, base):
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home, True)
+        return D.suite_env(base, self.home)
+
+    def test_only_listed_variables_reach_the_suite(self):
+        env = self.env({'PATH': '/bin', 'HOME': '/home-of/me', 'LANG': 'C', 'GH_TOKEN': 'x', 'GITHUB_TOKEN': 'x',
+                        'OPENAI_API_KEY': 'x', 'MY_SECRET': 'x', 'NPM_TOKEN': 'x', 'AWS_ACCESS_KEY_ID': 'x',
+                        'SSH_AUTH_SOCK': '/tmp/agent.sock', 'GH_CONFIG_DIR': '/home-of/me/.config/gh',
+                        'ODD_NAME': 'leak'})
+        self.assertEqual(sorted(env), ['CI', 'HOME', 'LANG', 'PATH', 'TMPDIR', 'TZ',
+                                       'XDG_CACHE_HOME', 'XDG_CONFIG_HOME'])
+
+    def test_home_is_throwaway_and_no_ssh_agent(self):
+        env = self.env({'PATH': '/bin', 'HOME': os.path.expanduser('~'), 'SSH_AUTH_SOCK': '/tmp/a'})
+        self.assertNotEqual(os.path.realpath(env['HOME']), os.path.realpath(os.path.expanduser('~')))
+        self.assertEqual(env['HOME'], self.home)
+        self.assertNotIn('SSH_AUTH_SOCK', env)
+        self.assertTrue(os.path.isdir(env['TMPDIR']))
+
+
+class Addressed(unittest.TestCase):
+    """Who counts for the start gate: only MAINTAINER_LOGINS, never a passer-by or our own close."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.ledger = os.path.join(self.tmp, 'published.jsonl')
+        put(self.ledger, '{"pr": 7}\n')
+        self.old = (D.run, D.FORK_OWNER, os.environ.get('MAINTAINER_LOGINS'))
+        D.FORK_OWNER = 'loopbot'
+        os.environ['MAINTAINER_LOGINS'] = 'brad'
+        self.pr = {'state': 'OPEN', 'reviews': [], 'comments': []}
+        self.closed_by = 'brad'
+
+        def fake(args, cwd=None, check=True):
+            if args[:3] == ['gh', 'pr', 'view']:
+                return json.dumps(self.pr)
+            if args[:2] == ['gh', 'api'] and args[2].endswith('/events'):
+                return self.closed_by
+            raise AssertionError(args)
+        D.run = fake
+
+    def tearDown(self):
+        D.run, D.FORK_OWNER = self.old[0], self.old[1]
+        if self.old[2] is None:
+            os.environ.pop('MAINTAINER_LOGINS', None)
+        else:
+            os.environ['MAINTAINER_LOGINS'] = self.old[2]
+
+    def rc(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return D.addressed([self.ledger])
+
+    def test_unset_maintainer_logins_refuses(self):
+        os.environ.pop('MAINTAINER_LOGINS')
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+            D.addressed([self.ledger])
+
+    def test_drive_by_comment_does_not_count(self):
+        self.pr['comments'] = [{'author': {'login': 'passerby'}}]
+        self.assertEqual(self.rc(), 1)
+
+    def test_maintainer_comment_counts(self):
+        self.pr['comments'] = [{'author': {'login': 'brad'}}]
+        self.assertEqual(self.rc(), 0)
+
+    def test_self_close_does_not_count(self):
+        self.pr['state'], self.closed_by = 'CLOSED', 'loopbot'
+        self.assertEqual(self.rc(), 1)
+
+    def test_maintainer_close_counts(self):
+        self.pr['state'] = 'CLOSED'
+        self.assertEqual(self.rc(), 0)
+
+    def test_merge_counts(self):
+        self.pr['state'] = 'MERGED'
+        self.assertEqual(self.rc(), 0)
 
 
 class Drift(unittest.TestCase):

@@ -112,15 +112,22 @@ scheduler tick):
 - `stop` from the owner: `session.py stop --by <owner>`. No new rounds or finders; keep
   watching outcomes and doing repairs on PRs already open.
 
-Log every exchange in `owner-talk.jsonl`. If a scheduler started you, never ask anything:
-work from the session as recorded.
+Log every exchange with `session.py say --who owner|coordinator --name <name> --kind <kind>
+--words "<verbatim>"`. When the owner gives an answer to a human-review item (theirs or
+Brad's, which reaches the loop through them), record it with `session.py answer HR-<id> --by
+<owner> --choice <n> --words "<verbatim>"`; the next Decider run re-routes it. If a scheduler
+started you, never ask anything: work from the session as recorded.
 
 0. **Resume first.** If a previous run of any agent in this round stopped without its
    handoff, inspect its worktree and state files and dispatch only what is missing (see
    [implementation notes](../docs/process.md#10-implementation-notes)). Before PRs open, run
    the round integration check from [process.md section 3.5](../docs/process.md#35-fix).
-1. **Check the start gate.** For every PR in the previous round's `prs_opened`, read
-   its timeline. It is addressed if the maintainer merged it, closed it, submitted a
+1. **Check the start gate.** First run `python3 scripts/loop.py reconcile`. If it lists
+   open PRs from the fork account that no round in this state folder opened and no owner
+   adopted, write `status: gate-check` with the list and stop: a new state folder must never
+   hide open PRs. The owner decides where they came from and adopts them (`loop.py adopt`).
+   Then, for every PR in `$STATE_DIR/prs.jsonl` that is still open or changed since the
+   last round (`driver.py addressed $STATE_DIR/prs.jsonl` checks them all), read its timeline. It is addressed if the maintainer merged it, closed it, submitted a
    review, or commented asking for a fix. CI, bot comments, the loop's own comments,
    reactions and labels do not count. Brad's agent counts only as described in
    [coordination](../docs/coordination-with-brads-agent.md#does-its-action-count-as-addressed).
@@ -163,19 +170,25 @@ work from the session as recorded.
    that starts a process instead of an in-runtime agent uses
    `watch.py run <role> -- <command>`, which does both.
 7. **Start the finders** on the pin, each with its template from `agents/finders/` and
-   only the areas the plan gives it. Start every agent with an environment that has no
-   GitHub write token, and record what each received in `dispatch.json`. If an agent
+   only the areas the plan gives it. Start every role with `python3 scripts/loop.py run-role
+   <role> --round <round> --id <name> --prompt-file <file>`: it builds the role's environment
+   from an allow-list (no GitHub token, no SSH agent, gh signed out, `git push` to GitHub
+   disabled), gives each finder a private output folder and its own copy of `known.json`
+   (write `$OUT` and `$KNOWN` in the prompt; run-role fills them in), registers the role with
+   the Coach watch, and records what it got in `dispatch.json`. A finder must never read
+   another finder's output, even if it can: independent evidence depends on it. If an agent
    can do more than [its role allows](../docs/roles.md#enforced-by-tools-not-by-prompts),
    do not start it. They may run in parallel. Open Code Review works
    through its planned parts in order until its usage or the token budget runs out.
 8. **Wait for finders.** A finder counts as run only when its `findings.json` exists
-   and parses against the schema; record its `run_status` and files covered. A finder
+   and validates against [candidate.schema.json](../templates/candidate.schema.json); record its `run_status` and files covered. A finder
    that fails is restarted once from its own output file. A second failure is
    recorded as `not-run` with the reason; the round continues without it, its areas
    keep their staleness, and the round will close as `partial`
    ([partial is never clean](../docs/process.md#partial-is-never-clean)).
-9. **Start the Decider** with all `findings.json` files, `known.json`, and the
-   outcomes since the last round. When it finishes, check in code that every
+9. **Start the Decider** with all `findings.json` files, `known.json`, the
+   outcomes since the last round, and the owner's answers to human-review items
+   (`session.py answers`). When it finishes, check in code that every
    candidate id from every finder appears in exactly one decision's `merged_from`.
    A missing id is a lost candidate: send the Decider back for it. Then order the fix queue: fixes for broken earlier loop
    changes first, then owner questions in one batch, then fixes by severity, user
@@ -183,7 +196,8 @@ work from the session as recorded.
 10. **Start Bug fixers** for each `fix` route in `decider/decisions.json`. Group
    fixers by code area so two fixers never edit the same file. Limit concurrency to
    what the machine can carry (full suites run one at a time).
-11. **Record PRs** as they are opened (`prs_opened`, scorecard row).
+11. **Record PRs** as they are opened: `python3 scripts/loop.py record-pr <round> <number>`,
+    `prs_opened`, scorecard row.
 12. **Watch outcomes** on every loop PR, from every round, at a modest interval.
     Append each maintainer action to `outcomes.jsonl`, with Brad's comments verbatim
     and classified. Read every closure comment in full.
@@ -197,7 +211,8 @@ work from the session as recorded.
     reasoning). Record what it finds in `rounds/<round>/drop-recheck.json`. This is how
     the loop learns what the Decider wrongly threw away.
 16. **Close the round** when every PR it opened is addressed, every candidate has a
-    route, and the Coach has written its feedback. Record `end_state`; any finder run
+    route, and the Coach has written its feedback. A round with no Coach feedback in
+    `rounds/<round>/coach/` closes as `partial`. Record `end_state`; any finder run
     that was not clean makes it `partial`. Score each focus area's `expected` as met,
     not met or no signal. Run `session.py pass-done <round>` and `session.py prs <open
    loop PRs>`. A manual session ends here: tell the owner what the pass found and what

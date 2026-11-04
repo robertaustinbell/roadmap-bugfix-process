@@ -119,6 +119,29 @@ class Session(unittest.TestCase):
         self.env['SESSION_MAX_DAYS'] = '30'
         self.assertEqual(self.run_('may-open-round').returncode, 0)
 
+    def test_answer_to_a_human_review_item_reaches_the_decider_once(self):
+        self.assertNotEqual(self.run_('answer', 'HR-1', '--by', 'mallory', '--words', 'x').returncode, 0)
+        self.assertNotEqual(self.run_('answer', 'not-an-id', '--by', 'austin', '--words', 'x').returncode, 0)
+        r = self.run_('answer', 'HR-20261103-1', '--by', 'austin', '--choice', '1',
+                      '--words', 'Brad: yes, add the spellings that equal mIU/L')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        open_ = json.loads(self.run_('answers').stdout)
+        self.assertEqual([x['item'] for x in open_], ['HR-20261103-1'])
+        self.assertEqual(open_[0]['words'], 'Brad: yes, add the spellings that equal mIU/L')
+        self.assertEqual(self.run_('answer-used', 'HR-20261103-1', '--round', 'R2').returncode, 0)
+        self.assertEqual(json.loads(self.run_('answers').stdout), [])
+        self.assertNotEqual(self.run_('answer-used', 'HR-9', '--round', 'R2').returncode, 0)
+        with open(os.path.join(self.tmp.name, 'owner-talk.jsonl')) as f:
+            talk = [json.loads(x) for x in f]
+        self.assertEqual(talk[-1]['kind'], 'answer')
+        self.assertEqual(talk[-1]['item'], 'HR-20261103-1')
+
+    def test_say_logs_owner_talk_and_checks_owner_names(self):
+        self.assertEqual(self.run_('say', '--who', 'owner', '--name', 'austin', '--kind', 'kit-approval',
+                                   '--words', 'ok, use the new kit').returncode, 0)
+        self.assertNotEqual(self.run_('say', '--who', 'owner', '--name', 'eve', '--kind', 'start',
+                                      '--words', 'go').returncode, 0)
+
     def test_owner_talk_counts_as_activity_for_the_coach(self):
         self.run_('start', '--mode', 'automated', '--by', 'austin', '--request', 'go')
         self.assertTrue(os.path.isdir(os.path.join(self.tmp.name, 'activity')))

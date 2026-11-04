@@ -5,6 +5,13 @@ Three layers:
 
 1. [Offline synthetic sandbox](#1-offline-synthetic-sandbox): target code runs in
    a locked-down container with no network and no credentials.
+
+   **What the publish driver does today:** it runs the full suite on the host, as the
+   operator's user, with an environment built from an allow-list, a throwaway `HOME` and no
+   SSH agent socket. That keeps tokens and `~/.config/gh`, `~/.ssh` and `~/.npmrc` out of
+   reach by their usual paths. It does not stop code that opens files by absolute path,
+   asks the macOS keychain, or uses the network. The container below is the target, and
+   is not wired into the driver yet.
 2. [Full suite](#full-suite): the whole test suite at the exact head, run serially.
 3. [Live validation](#3-live-validation): browser, two-tab, real cloud storage or
    a phone simulator, for what offline tests cannot settle.

@@ -41,6 +41,14 @@ a scripted reproduction at the pinned commit with exact commands, environment
 (Node version, `TZ`), synthetic inputs, observed output, and a control run showing
 the correct output. A reproduction confirms on its own.
 
+**Stand-in runners.** When the repo's own runner cannot run (no `node_modules`, no
+network), a reproduction may use stand-ins: another build of a dependency, a small
+replacement for the test runner. Such a reproduction counts for **routing** only. Record
+`witness_runner: "stand-in"` and name every stand-in. The Bug fixer must re-run the witness
+under the repo's real runner before writing any code, and `red_at_base` in its receipt must
+come from the real runner. If the real runner does not show the failure, it writes
+`NOT-REPRODUCED.md` and stops.
+
 ### Level 3: traced path
 
 For code that cannot be run safely or cheaply (CI workflow files, configuration,
