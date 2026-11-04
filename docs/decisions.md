@@ -5,6 +5,18 @@ Each entry names the decision it feeds and its removal condition, per
 [adding a rule, a field or a gate](scorecard-and-test-set.md#adding-a-rule-a-field-or-a-gate).
 Rules live in their own pages; this page records why they are there.
 
+## 2026-11-04: every stop file stops the publisher (v0.3.1)
+
+The kit's self-test found that the publish driver checked only `HOLD.md`, `PUSH-REFUSED.md` and
+`NOT-REPRODUCED.md`. A Bug fixer's `HELD-FOR-HUMAN.md` did not stop it on its own, although the
+docs said it did; only a missing approval did.
+
+| Change | Why | Undo when |
+|---|---|---|
+| `STOP_FILES` in the driver lists every stop file; `stopped()` is tested for each one, and a test keeps the docs' list equal to it | See above | Never removed |
+| `addressed()` closes the ledger file | The open file raised a ResourceWarning that broke a mutation tool's baseline | Never removed |
+| `ROLE_CMD` help names a turn budget | A repair ran out of turns at a 150-turn cap and left neither a result nor a stop file | Never removed |
+
 ## 2026-11-03: fixes from a trial run of the skill in Claude
 
 A second review, with a trial run of the skill on lab-value code, found that several limits

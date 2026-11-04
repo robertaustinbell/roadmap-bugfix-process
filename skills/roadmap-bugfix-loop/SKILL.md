@@ -5,9 +5,9 @@ license: MIT
 compatibility: "Needs a shell, git, gh signed in with push access to the loop's fork, Python 3.9+, and network access to GitHub. macOS or Linux. Written for Claude Code and Hermes Agent; any agent that can run shell commands and start separate agents can follow it."
 metadata:
   author: "Austin Bell (robertaustinbell)"
-  version: "0.3.0"
+  version: "0.3.1"
   kit: "https://github.com/robertaustinbell/roadmap-bugfix-process"
-  kit_ref: "v0.3.0"
+  kit_ref: "v0.3.1"
 ---
 
 # Roadmap bug-fix loop

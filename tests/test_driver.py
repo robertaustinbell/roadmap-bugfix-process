@@ -12,6 +12,7 @@ import io
 import importlib.util
 import json
 import os
+import re
 
 os.environ['LOOP_CONFIG'] = os.devnull  # never read a real loop.env in tests
 import shutil
@@ -262,6 +263,42 @@ class Artifacts(unittest.TestCase):
         self.assertEqual(D.artifact_problems('One fix... and a <= b, and === in JS.\n', 'x'), [])
 
 
+class StopFiles(unittest.TestCase):
+    """Any stop file, whichever role wrote it, keeps the driver away from a fix folder."""
+
+    def setUp(self):
+        self.d = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def test_each_stop_file_stops_the_folder(self):
+        self.assertIn('HELD-FOR-HUMAN.md', D.STOP_FILES)
+        for name in D.STOP_FILES:
+            with self.subTest(name=name):
+                p = os.path.join(self.d, name)
+                open(p, 'w').close()
+                self.assertEqual(D.stopped(self.d), name)
+                os.remove(p)
+
+    def test_folder_with_no_stop_file_is_not_stopped(self):
+        open(os.path.join(self.d, 'READY-FOR-REVIEW'), 'w').close()
+        self.assertIsNone(D.stopped(self.d))
+
+    def test_the_loop_asks_stopped_before_anything_else(self):
+        with open(DRIVER) as f:
+            src = f.read()
+        ready = src[src.index('    def ready(d):'):src.index('    def ready(d):') + 400]
+        self.assertIn('if stopped(d):', ready.split('try:')[0])
+
+    def test_docs_list_the_same_stop_files(self):
+        with open(os.path.join(ROOT, 'docs', 'human-review-and-escalation.md')) as f:
+            doc = f.read()
+        para = doc[doc.index('Stop files every role'):]
+        para = para[:para.index('\n\n')]
+        self.assertEqual(set(re.findall(r'`([A-Z-]+\.md)`', para)), set(D.STOP_FILES))
+
+
 class SuiteEnv(unittest.TestCase):
     def env(self, base):
         self.home = tempfile.mkdtemp()
@@ -316,6 +353,15 @@ class Addressed(unittest.TestCase):
     def rc(self):
         with contextlib.redirect_stdout(io.StringIO()):
             return D.addressed([self.ledger])
+
+    def test_ledger_file_is_closed(self):
+        import gc
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            self.rc()
+            gc.collect()
+        self.assertEqual([x for x in w if issubclass(x.category, ResourceWarning)], [])
 
     def test_unset_maintainer_logins_refuses(self):
         os.environ.pop('MAINTAINER_LOGINS')

@@ -42,6 +42,8 @@ MUTATIONS = [
     ('already published', "need(not ledger_has(ledger, 'branch', branch),", "need(True,"),
     ('suite keeps only listed variables', 'env = {k: base[k] for k in SUITE_KEEP if k in base}', 'env = dict(base)'),
     ('suite gets a throwaway HOME', "               HOME=home, TMPDIR", "               TMPDIR"),
+    ('stop files stop a folder', '        if os.path.exists(os.path.join(d, x)):\n            return x', '        if False:\n            return x'),
+    ('HELD-FOR-HUMAN is a stop file', "STOP_FILES = ('HOLD.md', 'HELD-FOR-HUMAN.md', ", "STOP_FILES = ('HOLD.md', "),
     ('maintainer logins required', "    need(maint, 'MAINTAINER_LOGINS is not set", "    need(True, 'MAINTAINER_LOGINS is not set"),
     ('only listed maintainers count', '        return login in maint\n', '        return True\n'),
     ('who closed it must count', '            if counts(who):\n', '            if True:\n'),
