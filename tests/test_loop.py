@@ -78,6 +78,14 @@ class Preflight(Base):
                      'fmsm: its pinned tool', 'trail-of-bits: its pinned tool'):
             self.assertIn(want, r.stdout)
 
+    def test_missing_secret_rules_on_upstream_main_is_a_problem(self):
+        wd = os.path.join(self.tmp, 'roadmap')
+        os.makedirs(wd)
+        sp.run(['git', 'init', '-q', wd], check=True)
+        r = self.run_('preflight', '--offline', '--finders', '', WORKDIR=wd)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('tools/secret-rules.mjs is not on upstream/main', r.stdout)
+
     def test_write_access_to_upstream_is_refused(self):
         with open(os.path.join(self.tmp, 'perms.json'), 'w') as f:
             f.write('{"admin": false, "maintain": false, "push": true}')
@@ -152,6 +160,17 @@ EOF
         r = self.run_('run-role', 'decider', '--round', 'R1', '--prompt-file', self.prompt, ROLE_PASS='GH_TOKEN')
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('may not hand GH_TOKEN', r.stderr)
+
+    def test_adversary_role_starts_with_no_credentials(self):
+        exe(self.agent, 'env > "$STATE_DIR/adversary-env.txt"\n')
+        r = self.run_('run-role', 'adversary', '--round', 'R1', '--id', 'adv-fix1', '--prompt-file', self.prompt)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        with open(os.path.join(self.sd, 'adversary-env.txt')) as f:
+            seen = f.read()
+        for k in ('GH_TOKEN=', 'GITHUB_TOKEN=', 'SSH_AUTH_SOCK=', 'OPENAI_API_KEY='):
+            self.assertNotIn(k, seen)
+        with open(os.path.join(self.sd, 'rounds', 'R1', 'dispatch.json')) as f:
+            self.assertEqual(json.load(f)['agents'][-1]['role'], 'adversary')
 
     def test_unknown_role_and_bad_ids_are_refused(self):
         self.assertNotEqual(self.run_('run-role', 'merger', '--round', 'R1', '--prompt-file', self.prompt).returncode, 0)

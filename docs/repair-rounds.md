@@ -96,12 +96,17 @@ With all tests added, revert one production change at a time. Record which tests
 fail. A change no test notices needs a test or should be removed. Report the counts
 per mutant in the PR comment.
 
-### 6. Gates, review, full suite
+### 6. Gates, adversarial pass, review
 
-1. Rerun the [quality gates](quality-gates.md) at the new head.
-2. Send the delta to a fresh reviewer (see [Delta review](#delta-review)).
-3. Run the full suite at the reviewed head
-   ([validation-and-sandbox.md](validation-and-sandbox.md#full-suite)).
+1. Rerun the [quality gates](quality-gates.md) at the new head (targeted tests,
+   typechecks, mutants, CRAP, the secret-fixture check).
+2. Run an [adversarial pass](../agents/adversary.md) on the delta. Write any residual
+   into the AC and the PR body's Known limits line.
+3. Send the delta to a fresh reviewer (see [Delta review](#delta-review)).
+4. No local full suite: CI runs it on the pushed head, and the publisher waits for it
+   ([publishing.md](publishing.md#the-ci-gate)). A red head comes back here.
+5. Never push while the PR's head is in the maintainer's batch review; the publisher
+   refuses ([the in-review guard](publishing.md#the-in-review-guard)).
 
 ### 7. Push and reply
 

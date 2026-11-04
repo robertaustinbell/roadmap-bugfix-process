@@ -195,7 +195,9 @@ started you, never ask anything: work from the session as recorded.
    impact, confidence and size, up to `fix_slots`.
 10. **Start Bug fixers** for each `fix` route in `decider/decisions.json`. Group
    fixers by code area so two fixers never edit the same file. Limit concurrency to
-   what the machine can carry (full suites run one at a time).
+   what the machine can carry. After each fixer finishes its gates, start a fresh
+   [adversary](adversary.md) on that folder (`run-role adversary`); blocking findings
+   go back to the fixer, and only then the independent reviewer.
 11. **Record PRs** as they are opened: `python3 scripts/loop.py record-pr <round> <number>`,
     `prs_opened`, scorecard row.
 12. **Watch outcomes** on every loop PR, from every round, at a modest interval.

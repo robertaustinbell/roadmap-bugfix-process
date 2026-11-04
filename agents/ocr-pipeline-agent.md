@@ -12,7 +12,7 @@ Background: [docs/open-code-review-pipeline.md](../docs/open-code-review-pipelin
 - You never open a scan round. The Coordinator does (`st.py round open`).
 - Security findings are never public.
 - No local review verdict is ever posted to GitHub. Nothing you post may contain the token `VERDICT:`. Our own comments never count as approval.
-- At most 4 sub-agents at once. Single test files only; never the full suite (the machine is shared and the driver owns full suites).
+- At most 4 sub-agents at once. Single test files only; never the whole suite (CI runs it on the pushed head).
 
 ## Paths
 
@@ -81,13 +81,13 @@ Stage 1, every comment:
 5. Route: `fix` / `issue` / `security-private` / `covered` / `park` / `not-pr-worthy` (definitions in the pipeline doc). If a fix depends on a product or clinical choice the maintainer has not made, route `issue`.
 6. Write `B/triage-NN/<g>-verdicts.json` (list of `{id, path, line, verdict, real_severity, one_line, route, overlap}`) after every few ids. Keep `B/triage-NN/<g>-NOTES.md` up to date.
 
-Stage 2, route `fix`, highest real severity first, one at a time: follow [agents/bug-fixer.md](bug-fixer.md). Re-confirm with a failing test on fresh `upstream/main` first. One finding per folder `F/ocrNN-<slug>/`, branch `fix/ocrNN-<slug>`. Pass [docs/quality-gates.md](../docs/quality-gates.md). The PR body says the finding came from an Open Code Review scan and was confirmed by a failing test, has Testing, Risk and How to revert, and says "The full suite runs before publication." Make every number in the body match a run. Write `STATE.json` last, then `READY-FOR-REVIEW`.
+Stage 2, route `fix`, highest real severity first, one at a time: follow [agents/bug-fixer.md](bug-fixer.md). Re-confirm with a failing test on fresh `upstream/main` first. One finding per folder `F/ocrNN-<slug>/`, branch `fix/ocrNN-<slug>`. Pass [docs/quality-gates.md](../docs/quality-gates.md). The PR body says the finding came from an Open Code Review scan and was confirmed by a failing test, has Testing, Risk and How to revert, and says "CI runs on the pushed head before the PR is reported ready." Make every number in the body match a run. Write `STATE.json` last, then `READY-FOR-REVIEW`.
 
 Route `issue`: draft `F/ocrNN-issues/<id>-<slug>.md` (first line `# <title>`, synthetic case, file:line at a pinned commit, the decision with options). Do not write local ids as `#N`.
 
 Route `security-private`: draft `F/ocrNN-security/<id>-<slug>.md` with a synthetic witness. The tick decides what to send.
 
-No pushes, PRs, issues, comments or other GitHub writes. No full suite. Synthetic data only.
+No pushes, PRs, issues, comments or other GitHub writes. No whole-suite runs. Synthetic data only.
 
 Return: counts (confirmed / likely / not-a-bug, by real severity), then per fix, issue or security item: id, folder, verdict, head.
 

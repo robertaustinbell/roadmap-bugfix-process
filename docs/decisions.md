@@ -5,6 +5,25 @@ Each entry names the decision it feeds and its removal condition, per
 [adding a rule, a field or a gate](scorecard-and-test-set.md#adding-a-rule-a-field-or-a-gate).
 Rules live in their own pages; this page records why they are there.
 
+## 2026-11-04: CI replaces the local full suite; adversarial pass; in-review guard
+
+Brad's process changed: his CI runs the whole suite on six shards, plus typechecks, builds,
+gitleaks, the dependency audit and the user-stories check, on every push (about three
+minutes), and a full local run is no longer his merge gate. Every PR he sent back on
+2026-11-04 had passed the loop's local full suite. His findings were logic gaps and ACs
+that promised more than the code did. Austin approved moving the effort from the local
+suite to an adversarial pass and a CI gate.
+
+| Change | Why | Feeds | Undo when |
+|---|---|---|---|
+| The local full suite is no longer a publish gate; `LOCAL_SUITE=shared` (default off) keeps it for shared record, sync and storage code ([publishing.md](publishing.md#what-the-driver-does)) | It caught none of the problems Brad found, took the longest of any step, and CI runs the same suite on every push | Publish or refuse | A red CI on a pushed head that the local suite would have caught, twice in 10 rounds, for code outside `SHARED_SUITE_PATHS` |
+| [CI gate](publishing.md#the-ci-gate): wait for every check on the pushed head; green writes `CI-GREEN` and a report line for the Coordinator; red writes `CI-RED.md` and goes to repair | A head must never be reported to Brad's agent before his CI passes | What is reported as ready | Never removed |
+| [Adversary](../agents/adversary.md): a fresh agent tries to break each fix; residuals go into the AC and the PR body's Known limits line | Brad's findings were cases the fix did not cover and ACs that overpromised | Whether a fix goes to review | The quality tally shows no `ac_overpromise`, `cross_tab`, `stalled_body` or `input_parsing` findings for 10 rounds, and a trial without it finds no more |
+| [In-review guard](publishing.md#the-in-review-guard) | A push to a PR whose head is pinned in a batch voids Brad's review | Repair pushes | Brad stops pinning heads |
+| [Secret-fixture check](publishing.md#the-secret-fixture-check) with the roadmap repo's own rules | One secret-shaped test value makes Brad's batch tool refuse the whole batch | Publish or refuse | Never removed while the batch tool checks it |
+| Fresh `upstream/main` base, next AC number free on `main` (checked again before opening); edit `docs/user-stories.md` only, never the HTML | AC number reuse is one of the finding types in Brad's reviews; `docs/user-stories.html` is not tracked on `main` and his Pages build makes it | PR text and branch base | Never removed |
+| [Quality tally](quality-gates.md#quality-tally) | Local gates say a PR is ready; Brad's review says whether it was | Which gate to strengthen next | Never removed; it is the real measure |
+
 ## 2026-11-03: fixes from a trial run of the skill in Claude
 
 A second review, with a trial run of the skill on lab-value code, found that several limits

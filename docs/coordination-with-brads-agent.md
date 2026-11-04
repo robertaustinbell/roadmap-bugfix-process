@@ -28,6 +28,32 @@ about PRs the loop already opened are handled as below.
 5. **No private context in the channel**: no operator details, no data, no security
    details unless that channel is the private route Brad named for security reports.
 
+## Brad's batch process
+
+Brad's agent reviews loop PRs in batches, and the loop works around them:
+
+1. **Batches of at most three PRs, grouped by the files they share.** Each group gets a
+   fresh adversary review and a second model's review on Brad's side. When a batch
+   lands, GitHub marks its PRs merged.
+2. **Heads are pinned.** The batch's own PR (branch `claude/batch-*` or
+   `claude/group-*`) names each loop PR's head SHA in its body. That head is what Brad
+   reviews.
+3. **Never push while a PR is in review.** A push moves the head and voids his review.
+   The publisher refuses a push to any PR whose current head appears in an open batch
+   or group PR's body ([the in-review guard](publishing.md#the-in-review-guard)). Wait
+   for the batch result.
+4. **Report heads only after CI is green.** After each push the publisher waits for
+   every check on the pushed head. Green writes one line, "PR #N ready, head `<sha>`", to
+   `$STATE_DIR/report-outbox.txt`. The Coordinator (not the driver) posts each new line,
+   once, in the shared agent channel, so it goes into Brad's next group. A red or
+   pending head is never reported.
+5. **No secret-shaped fixtures.** Brad's batch tool refuses a batch whose added lines
+   hold one (`tools/merge-batch.mjs`, exit 5), which stalls the other PRs in it. The
+   publisher checks with the same rules before pushing
+   ([secret-fixture check](publishing.md#the-secret-fixture-check)).
+6. **Record each review result** in the PR quality ledger
+   ([quality tally](quality-gates.md#quality-tally)).
+
 ## Does its action count as "addressed"?
 
 The start gate counts **maintainer actions** only.
@@ -57,9 +83,10 @@ Brad's agent may send findings as chat messages rather than PR comments. Then:
 
 | Request | What the loop does |
 |---|---|
-| "Merge main into PR X" | A merge commit, not a rebase (that is what was asked). Push fast-forward. Run the PR's targeted tests, typechecks, an independent review and the full suite first. The reply names the main SHA merged and what conflicted. |
+| "Merge main into PR X" | A merge commit, not a rebase (that is what was asked). Push fast-forward. Run the PR's targeted tests (including files that name a changed file), typechecks, the secret-fixture check and an independent review first; CI on the pushed head is the suite. Not while the PR is in a batch. The reply names the main SHA merged and what conflicted. An open PR that still carries `docs/user-stories.html` is left alone: Brad's batch tool drops that file, so do not merge main into it just for that. |
 | "Rebase PR X" | Rebase onto current `main`; push with `--force-with-lease` against the head recorded at the start, so a change Brad made is never overwritten. |
-| "Fresh push to clear a flaky check" | Same as merge main: a real merge, gates, then push. |
+| "Fresh push to clear a flaky check" | Same as merge main: a real merge, gates, then push, then wait for CI. |
+| A returned PR (Brad sent it back with findings) | Follow his comment exactly (for example "rebase onto main's newer tab-close handler"). With no instruction about the base, merge `main` and push fast-forward. Repair, adversarial pass, review, push, CI green, then report the new head. |
 | "Is anything in PR X still needed after my merges?" | Answer from current `main`: read the merged code path, check textual conflicts, name exactly which parts main still lacks and why. Ask whether to update the PR or let Brad fold it in. Recheck right before sending. |
 | "How is the loop going?" | A short status: rounds, PRs open/merged/closed, what is in review, what is held and why. |
 | A Medium/High finding with a suggested one-line fix | Reproduce RED, apply the suggested fix (or a better one with evidence why), GREEN, gates, review, push, reply. |

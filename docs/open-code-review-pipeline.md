@@ -136,7 +136,7 @@ Fixes follow the same rules as every other finder:
 - The fix folder holds `STATE.json` (`worktree`, `branch`, `head`), `pr-title.txt`, `pr-body.md`, logs and `fix.patch`. `STATE.json` and `READY-FOR-REVIEW` are written last.
 - An agent that did not write the fix reviews it ([independent-review.md](independent-review.md)) and writes the next `review-<k>.json` ([schema](../templates/review-verdict.schema.json)): `verdict`, the full `head`, the checks, and a `text_sha256` digest of the title and body it reviewed. These are local files only.
 - `CHANGES` goes to a repair worker; after round 1, only the new diff is re-reviewed. Wording-only changes to the PR body can be applied directly with a new APPROVE on the same head. After 3 rounds without approval the folder gets `HOLD.md` and a human is told.
-- The [publish driver](publishing.md) runs the full suite and opens the PR once the latest review approves the current head. The pipeline never pushes, comments or merges by itself.
+- The [publish driver](publishing.md) checks the folder, opens the PR once the latest review approves the current head, and waits for CI on the pushed head. The pipeline never pushes, comments or merges by itself.
 
 The PR body says the finding came from an Open Code Review scan and was confirmed by a failing test. It has Testing, Risk and How to revert sections.
 

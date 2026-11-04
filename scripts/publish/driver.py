@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish driver: runs the full suite on approved fix folders, one at a time, then opens or updates PRs.
+"""Publish driver: checks approved fix folders, one at a time, opens or updates PRs, then waits for CI.
 No AI. It never merges anything.
 
 Sanitized from a working implementation; review before running.
@@ -8,6 +8,8 @@ Subcommands:
   driver.py run --round-dir R [--fixes-dir F]   loop until R/stop-driver exists (or R/_done-round and nothing left)
   driver.py publish <fix folder> [--go]         open ONE new PR (dry run without --go)
   driver.py repair <round pr folder> [--go]     push ONE approved repair to an existing PR (dry run without --go)
+  driver.py ci <folder> [--wait-min N]          wait for CI on the head the driver pushed for this folder:
+                                                CI-GREEN (exit 0), CI-RED.md (exit 4) or CI-PENDING (exit 3)
   driver.py addressed <ledger.jsonl>...         restart-rule check: has every PR in these ledgers had a
                                                 maintainer action? exit 0 = all addressed, 1 = not yet
 
@@ -28,10 +30,23 @@ Ledgers record each external effect as "attempted" before the first GitHub write
 looks for the PR on GitHub and adopts it instead of opening a second one. Only observed_succeeded
 counts as published.
 
-For each ready folder, in order: textual merge pre-check against current upstream main; full suite once,
-serially, load-gated; real failures are rerun alone (still failing = refuse; passing alone = rerun the
-suite); files in the known-flaky list get up to 3 solo reruns; then the publish/repair dry run, then --go.
+For each ready folder, in order: textual merge pre-check against current upstream main; the publish/repair
+dry run, then --go; then the CI gate on the pushed head. The local full suite is not a gate: the maintainer's
+CI runs the whole suite on every push. LOCAL_SUITE=shared still runs it, serially and load-gated, when the
+change touches SHARED_SUITE_PATHS (real failures are rerun alone; known-flaky files get up to 3 solo reruns).
 A refusal writes PUSH-REFUSED.md in the folder; the loop skips that folder until a human moves it aside.
+
+Checks before any push (publish and repair): the review approves this head and text; clean worktree; merges
+clean; the fix commits are there; gitleaks; the secret-fixture check (the roadmap repo's own credential
+shapes, tools/secret-rules.mjs at upstream main, on the added lines); for a repair, the in-review guard (no
+push to a PR whose head an open claude/batch-* or claude/group-* PR body names: it is in the maintainer's
+review).
+
+CI gate (after the push): poll the check runs of the exact pushed head until all are complete or
+CI_WAIT_MIN passes. All success, skipped or neutral: CI-GREEN in the folder, a line in ci.jsonl and
+"PR #N ready, head <sha>" appended to report-outbox.txt in STATE_DIR for the Coordinator to post. Any other
+result: CI-RED.md with the failing jobs and a short log excerpt; the folder goes back to repair. Still
+running: CI-PENDING, polled again on every loop pass. A red head is never reported.
 
 Review files are LOCAL JSON files. Never post a `VERDICT:` line to GitHub: the
 maintainer's auto-ship workflow treats a bot comment carrying a `VERDICT: APPROVE` line as an approval.
@@ -46,9 +61,17 @@ Configuration (env vars):
   NODE_BIN_DIR      optional: directory put first on PATH for the suite (the repo's CI Node version)
   EXTRA_PATH        optional: more directories for PATH (e.g. an OpenSSL 3 bin dir; the repo's
                     app-attest tests need OpenSSL 3, and macOS ships LibreSSL)
+  LOCAL_SUITE       off (default): no local full suite; shared: run it only when the change touches
+                    SHARED_SUITE_PATHS (comma-separated globs; default: health-core merge, sync and
+                    record-session files, widget-src storage files)
+  CI_WAIT_MIN       how long the CI gate waits for the pushed head's checks (default 20)
+  CI_POLL_SEC       seconds between CI polls (default 60)
+  WORKDIR           the roadmap clone; the secret-fixture check reads tools/secret-rules.mjs from its
+                    upstream main. Missing rules refuse (fails closed)
+  STATE_DIR         report-outbox.txt goes here (default: next to the ledger)
   KNOWN_FLAKY       comma-separated test files that time out under load (default: the four seen so far)
   DRIVER_MAX_LOAD   wait while the 1-minute load average is above this (default: 4 x CPU count)
-  SUITE_TIMEOUT_MIN default 45; SUITE_MAX_WORKERS default 4
+  SUITE_TIMEOUT_MIN default 45; SUITE_MAX_WORKERS default 4 (only with LOCAL_SUITE=shared)
   GITLEAKS_BIN      default "gitleaks" on PATH; missing gitleaks refuses (fails closed)
   KEEP_AWAKE        command prefix for the suite, e.g. "caffeinate -ims" (default: that if available)
   MAINTAINER_LOGINS required for `addressed`: comma-separated logins whose review, comment or
@@ -58,6 +81,7 @@ Configuration (env vars):
 """
 import datetime
 import fcntl
+import fnmatch
 import glob
 import hashlib
 import json
@@ -99,6 +123,12 @@ MAX_LOAD = float(os.environ.get('DRIVER_MAX_LOAD', 4 * (os.cpu_count() or 2)))
 SUITE_TIMEOUT = int(os.environ.get('SUITE_TIMEOUT_MIN', '45')) * 60
 MAX_WORKERS = os.environ.get('SUITE_MAX_WORKERS', '4')
 GITLEAKS = os.environ.get('GITLEAKS_BIN', 'gitleaks')
+SHARED_SUITE_DEFAULT = ('packages/health-core/*merge*,packages/health-core/*sync*,'
+                        'packages/health-core/*record-session*,widget-src/*storage*')
+CI_WAIT_MIN = float(os.environ.get('CI_WAIT_MIN') or 20)
+CI_POLL_SEC = float(os.environ.get('CI_POLL_SEC') or 60)
+CI_OK = ('success', 'skipped', 'neutral')
+IN_REVIEW_PREFIXES = ('claude/batch-', 'claude/group-')
 _ka = os.environ.get('KEEP_AWAKE')
 KEEP_AWAKE = shlex.split(_ka) if _ka is not None else (['caffeinate', '-ims'] if shutil.which('caffeinate') else [])
 SECRET_NAME = re.compile(r'TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|PRIVATE_KEY|CREDENTIAL|^GH_|^GITHUB_|^AWS_', re.I)
@@ -134,6 +164,7 @@ def suite_environment():
 VITEST = ['node', 'node_modules/vitest/vitest.mjs', 'run']
 SELF = os.path.abspath(__file__)
 TEMPLATES = os.path.join(os.path.dirname(SELF), '..', '..', 'templates')
+SECRET_CHECK = os.path.join(os.path.dirname(SELF), 'secret_check.mjs')
 
 SHA40 = re.compile(r'[0-9a-f]{40}')
 VERDICTS = ('approve', 'changes', 'needs_decision', 'could_not_review')
@@ -350,7 +381,8 @@ def gitleaks_ok(wt):
 
 def suite_ok_at_head(d, wt, head):
     """suite.json at head; failures only in KNOWN files, each with a passing solo rerun log at head."""
-    need(open(f'{d}/suite-head.txt').read().strip() == head, 'suite not at head')
+    need(os.path.exists(f'{d}/suite-head.txt') and open(f'{d}/suite-head.txt').read().strip() == head,
+         'LOCAL_SUITE=shared and the change touches shared code, but the suite has not passed at head')
     sj = strict_load(f'{d}/suite.json')
     need(isinstance(sj.get('testResults'), list) and sj['testResults'], 'suite.json has no test results')
     bad = []
@@ -391,6 +423,89 @@ def fix_commits_present(wt, head):
     added = '\n'.join(ln[1:] for ln in diff.split('\n') if ln.startswith('+') and not ln.startswith('+++'))
     p = artifact_problems(added, 'the diff')
     need(not p, '; '.join(p))
+
+
+def suite_mode():
+    m = (os.environ.get('LOCAL_SUITE') or 'off').strip().lower()
+    need(m in ('off', 'shared'), f'LOCAL_SUITE is {m!r}; use off or shared')
+    return m
+
+
+def changed_files(wt, head):
+    base = run(['git', 'merge-base', f'{UP_REMOTE}/main', head], wt)
+    return [f for f in run(['git', 'diff', '--name-only', base, head], wt).split('\n') if f]
+
+
+def suite_wanted(wt, head):
+    """The local full suite is not a publish gate: the maintainer's CI runs the whole suite on every
+    push. With LOCAL_SUITE=shared it still runs when the change touches shared record, sync or storage
+    code (SHARED_SUITE_PATHS)."""
+    if suite_mode() == 'off':
+        return False
+    globs = [g.strip() for g in (os.environ.get('SHARED_SUITE_PATHS') or SHARED_SUITE_DEFAULT).split(',') if g.strip()]
+    return any(fnmatch.fnmatchcase(f, g) for f in changed_files(wt, head) for g in globs)
+
+
+def secret_rules(tmp):
+    """The roadmap repo's own credential shapes: tools/secret-rules.mjs as it is on upstream main, read
+    through WORKDIR's git (the same rules tools/merge-batch.mjs pre-flight uses). Taken from main, not
+    from the PR or the clone's checked-out branch, so a change cannot loosen the rules that check it.
+    Missing rules refuse."""
+    wd = os.environ.get('WORKDIR', '')
+    need(wd and os.path.isdir(wd), 'WORKDIR is not set or not a folder; the secret-fixture check needs the roadmap clone')
+    sp.run(['git', 'fetch', '-q', UP_REMOTE, 'main'], cwd=wd, capture_output=True)
+    r = sp.run(['git', 'show', f'{UP_REMOTE}/main:tools/secret-rules.mjs'], cwd=wd, capture_output=True, text=True)
+    need(r.returncode == 0 and 'PATTERNS' in r.stdout,
+         f'tools/secret-rules.mjs is missing on {UP_REMOTE}/main in WORKDIR; refusing rather than skipping '
+         'the secret-fixture check')
+    path = os.path.join(tmp, 'secret-rules.mjs')
+    with open(path, 'w') as f:
+        f.write(r.stdout)
+    return path
+
+
+def secret_fixture_hits(wt, head):
+    """'file:line rule' for every added line (vs upstream main) shaped like a credential; never the value."""
+    import tempfile
+    diff = run(['git', 'diff', '-U0', '--no-color', '--no-ext-diff', f'{UP_REMOTE}/main...{head}'], wt)
+    with tempfile.TemporaryDirectory(prefix='secret-check-') as tmp:
+        rules = secret_rules(tmp)
+        try:
+            r = sp.run(['node', SECRET_CHECK, rules], input=diff, cwd=tmp, env=suite_environment(),
+                       capture_output=True, text=True, timeout=300)
+        except (OSError, sp.TimeoutExpired) as e:
+            need(False, f'the secret-fixture check could not run ({e}); refusing rather than skipping')
+    if r.returncode == 0:
+        return []
+    need(r.returncode == 5, f'the secret-fixture check could not run (exit {r.returncode}): {r.stderr.strip()[-300:]}')
+    return [ln.strip() for ln in r.stdout.split('\n') if re.fullmatch(r'\S+:\d+ [\w-]+', ln.strip())] or ['(unparsed hit)']
+
+
+def secret_fixtures_clean(wt, head):
+    hits = secret_fixture_hits(wt, head)
+    need(not hits, 'secret-shaped text in the added lines; use plain strings like test-token-good '
+         '(file:line rule, never the value):\n' + '\n'.join(hits))
+
+
+def in_review_by(head, prs):
+    """Numbers of open claude/batch-* or claude/group-* PRs whose body names `head` (the full SHA, or a
+    7+ character prefix of it as its own word). Such a head is pinned in the maintainer's review."""
+    hits = []
+    for p in prs:
+        if not str(p.get('headRefName') or '').startswith(IN_REVIEW_PREFIXES):
+            continue
+        words = re.findall(r'(?<![0-9a-f])[0-9a-f]{7,40}(?![0-9a-f])', str(p.get('body') or '').lower())
+        if any(head.lower().startswith(w) for w in words):
+            hits.append(p.get('number'))
+    return hits
+
+
+def not_in_review(n, head):
+    """The in-review push guard: never push to a PR whose current head is in the maintainer's batch review."""
+    out = run(['gh', 'pr', 'list', '--repo', UP, '--state', 'open', '--limit', '500', '--json', 'number,headRefName,body'])
+    hits = in_review_by(head, json.loads(out or '[]'))
+    need(not hits, f"PR #{n} is in Brad's review: its head {head[:12]} is named in open batch PR(s) "
+         f"{', '.join(f'#{h}' for h in hits)}. Never push while it is in review; wait for the batch result")
 
 
 def ledger_records(path, key, value):
@@ -489,10 +604,12 @@ def publish(folder, go):
     clean_worktree_at(wt, head)
     p = review_problems(F, head, POST_FILES_NEW)
     need(not p, 'latest review does not approve this head and text: ' + '; '.join(p))
-    suite_ok_at_head(F, wt, head)
     merges_clean(wt, head)
     fix_commits_present(wt, head)
+    if suite_wanted(wt, head):
+        suite_ok_at_head(F, wt, head)
     need(gitleaks_ok(wt), 'gitleaks (the CI secret scan) flags this tree')
+    secret_fixtures_clean(wt, head)
     title = open(f'{F}/pr-title.txt').read().strip()
     body = open(f'{F}/pr-body.md').read()
     need(0 < len(title) < 200, 'title missing or too long')
@@ -544,11 +661,11 @@ def repair(folder, go):
     clean_worktree_at(wt, head)
     p = review_problems(d, head, POST_FILES_REPAIR)
     need(not p, 'latest review does not approve this head and text: ' + '; '.join(p))
-    suite_ok_at_head(d, wt, head)
     v = json.loads(run(['gh', 'pr', 'view', n, '-R', UP, '--json', 'headRefOid,headRefName,state,comments,body']))
     need(v['state'] == 'OPEN', f"PR #{n} is {v['state']}")
     need(v['headRefName'] == branch, f"PR branch {v['headRefName']} != {branch}")
     need(v['headRefOid'] == meta['head_at_start'], f"PR head moved on GitHub: {v['headRefOid']}")
+    not_in_review(n, v['headRefOid'])
     since = utc_time(meta['addressed_comment_at'], f'{d}/meta.json addressed_comment_at')
     newer = [c for c in v['comments'] if c['author']['login'] != FORK_OWNER
              and utc_time(c['createdAt'], 'GitHub comment createdAt') > since]
@@ -558,7 +675,10 @@ def repair(folder, go):
     need(ff or force, 'repair is not a fast-forward of the pushed head (set ALLOW_FORCE_WITH_LEASE=1 to allow)')
     merges_clean(wt, head)
     fix_commits_present(wt, head)
+    if suite_wanted(wt, head):
+        suite_ok_at_head(d, wt, head)
     need(gitleaks_ok(wt), 'gitleaks (the CI secret scan) flags this tree')
+    secret_fixtures_clean(wt, head)
     comment = open(f'{d}/comment.md').read()
     body = open(f'{d}/body.md').read() if os.path.exists(f'{d}/body.md') else None
     title = open(f'{d}/title.txt').read().strip() if os.path.exists(f'{d}/title.txt') else None
@@ -587,6 +707,152 @@ def repair(folder, go):
     rec = ledger_append(led, dict(rec, comment=cr, verified=ok, status='observed_succeeded' if ok else 'observed_failed'))
     print('PUSHED', json.dumps(rec))
     need(ok, 'READBACK MISMATCH')
+
+
+# ---------------------------------------------------------------------------------------------
+# ci: the CI gate on the head the driver pushed (replaces the local full suite)
+# ---------------------------------------------------------------------------------------------
+
+def classify_checks(runs):
+    """('green' | 'red' | 'pending', the runs that are not green). No runs yet, or any run not yet
+    completed, is pending. Once all are complete: green only when every conclusion is success, skipped
+    or neutral; anything else (failure, cancelled, timed_out, action_required, stale, unknown) is red."""
+    if not runs or any(r.get('status') != 'completed' for r in runs):
+        return 'pending', []
+    bad = [r for r in runs if r.get('conclusion') not in CI_OK]
+    return ('red', bad) if bad else ('green', [])
+
+
+def check_runs(head):
+    """Latest check runs for the exact head, or None when GitHub could not be read (counts as pending)."""
+    runs, page = [], 1
+    while True:
+        r = sp.run(['gh', 'api', f'repos/{UP}/commits/{head}/check-runs?filter=latest&per_page=100&page={page}'],
+                   capture_output=True, text=True)
+        if r.returncode:
+            return None
+        try:
+            out = json.loads(r.stdout)
+        except ValueError:
+            return None
+        got = out.get('check_runs') or []
+        runs += got
+        if not got or len(runs) >= int(out.get('total_count') or 0):
+            return runs
+        page += 1
+
+
+TOKEN_SHAPE = re.compile(r'(?:gh[pousr]_|github_pat_|sk-|xox[abposr]-|glpat-|AKIA|AIza)[A-Za-z0-9_\-]{6,}')
+
+
+def log_excerpt(run_, lines=25):
+    """The end of a failed GitHub Actions job's log, with anything token-shaped masked. GitHub masks
+    secrets in logs already; this is a second guard. Other check apps get no excerpt, only the link."""
+    if ((run_.get('app') or {}).get('slug')) != 'github-actions' or not run_.get('id'):
+        return ''
+    r = sp.run(['gh', 'run', 'view', '--job', str(run_['id']), '--log-failed', '-R', UP], capture_output=True, text=True)
+    if r.returncode:
+        return '(log not available)'
+    return TOKEN_SHAPE.sub('[masked]', '\n'.join(r.stdout.rstrip().split('\n')[-lines:]))
+
+
+def ci_target(F):
+    """(PR number, pushed head, ledger folder) for a folder the driver published or pushed at its STATE head."""
+    st = strict_load(f'{F}/STATE.json')
+    head, led_dir = st['head'], os.path.dirname(F)
+    if os.path.exists(f'{F}/meta.json'):
+        n = int(re.sub(r'\D', '', os.path.basename(F)) or 0)
+        recs = ledger_records(f'{led_dir}/pushed.jsonl', 'pr', n)
+        ok = bool(recs) and recs[-1].get('status') == 'observed_succeeded' and recs[-1].get('new') == head
+    else:
+        recs = ledger_records(f'{led_dir}/published.jsonl', 'branch', st['branch'])
+        ok = bool(recs) and recs[-1].get('status') == 'observed_succeeded' and recs[-1].get('head') == head
+        n = recs[-1].get('number') if recs else None
+    need(ok and n, f'{os.path.basename(F)}: the driver has not pushed this head ({head[:12]}); nothing to wait for')
+    return int(n), head, led_dir
+
+
+def ci_result(F, head):
+    for name, state in (('CI-GREEN', 'green'), ('CI-RED.md', 'red')):
+        p = f'{F}/{name}'
+        if os.path.exists(p) and open(p).readline().split()[-1:] == [head]:
+            return state
+    return None
+
+
+CI_LINE = re.compile(r'(CI\**\s+at\s+`([0-9a-f]{7,40})`:\s*)pending\b[^\n]*')
+
+
+def fill_ci_line(F, n, head, led):
+    """Fill the PR body's 'CI at `<head>`: pending' line, the only body text the driver writes itself.
+    No marker line, nothing is edited."""
+    v = json.loads(run(['gh', 'pr', 'view', str(n), '-R', UP, '--json', 'body,headRefOid']))
+    body = v.get('body') or ''
+    link = f'https://github.com/{UP}/pull/{n}/checks'
+    new = CI_LINE.sub(lambda m: m.group(1) + f'all checks passed ([checks]({link}))'
+                      if head.startswith(m.group(2)) else m.group(0), body)
+    if new == body or v.get('headRefOid') != head:
+        return
+    text_checks({'body': new}, attributed=())
+    with open(f'{F}/ci-body.md', 'w') as f:
+        f.write(new)
+    rec = dict(pr=n, head=head, effect='ci_body')
+    ledger_append(led, dict(rec, status='attempted'))
+    run(['gh', 'pr', 'edit', str(n), '-R', UP, '--body-file', f'{F}/ci-body.md'])
+    got = json.loads(run(['gh', 'pr', 'view', str(n), '-R', UP, '--json', 'body']))['body']
+    ok = got.strip() == new.strip()
+    ledger_append(led, dict(rec, status='observed_succeeded' if ok else 'observed_failed'))
+
+
+def ci(folder, wait_min=None, poll=None):
+    """The CI gate. 0 = CI-GREEN, 4 = CI-RED.md, 3 = CI-PENDING (polled again next loop pass)."""
+    F = os.path.abspath(folder)
+    n, head, led_dir = ci_target(F)
+    done = ci_result(F, head)
+    if done:
+        print(f'PR #{n} @{head[:8]}: CI already {done}')
+        return 0 if done == 'green' else 4
+    led = f'{led_dir}/ci.jsonl'
+    wait = CI_WAIT_MIN if wait_min is None else wait_min
+    with open(f'{F}/CI-PENDING', 'w') as f:  # written first, so a crash mid-wait is polled again
+        f.write(f'{head}\n')
+    deadline = time.time() + wait * 60
+    while True:
+        runs = check_runs(head)
+        state, bad = classify_checks(runs or [])
+        if state != 'pending' or time.time() >= deadline:
+            break
+        time.sleep(poll if poll is not None else CI_POLL_SEC)
+    now = datetime.datetime.now().isoformat(timespec='seconds')
+    if state == 'pending':
+        with open(f'{F}/CI-PENDING', 'w') as f:
+            f.write(f'{head}\nchecked {now}: {len(runs or [])} check run(s), not all complete\n')
+        print(f'PR #{n} @{head[:8]}: CI-PENDING')
+        return 3
+    os.remove(f'{F}/CI-PENDING')
+    if state == 'red':
+        parts = [f'CI is red at {head}\n', f'PR #{n}. The folder goes back to a repair fixer; push again only after '
+                 'the repair is reviewed. This head is never reported as ready.\n']
+        for r in bad:
+            parts.append(f"\n## {r.get('name')}: {r.get('conclusion')}\n\n{r.get('html_url') or ''}\n")
+            ex = log_excerpt(r)
+            if ex:
+                parts.append('\n```\n' + ex.replace('```', '` ` `') + '\n```\n')
+        with open(f'{F}/CI-RED.md', 'w') as f:
+            f.write(''.join(parts))
+        ledger_append(led, dict(pr=n, head=head, effect='ci', status='red', failed=[r.get('name') for r in bad]))
+        print(f'PR #{n} @{head[:8]}: CI-RED ({", ".join(str(r.get("name")) for r in bad)})')
+        return 4
+    with open(f'{F}/CI-GREEN', 'w') as f:
+        f.write(f'{head}\n{len(runs)} check run(s) success, skipped or neutral at {now}\n')
+    ledger_append(led, dict(pr=n, head=head, effect='ci', status='green', checks=len(runs)))
+    outbox = os.path.join(os.environ.get('STATE_DIR') or led_dir, 'report-outbox.txt')
+    with open(outbox, 'a') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.write(f'PR #{n} ready, head {head}\n')
+    fill_ci_line(F, n, head, led)
+    print(f'PR #{n} @{head[:8]}: CI-GREEN; reported to {os.path.basename(outbox)}')
+    return 0
 
 
 # ---------------------------------------------------------------------------------------------
@@ -711,56 +977,80 @@ def loop(R, NEWDIR):
             f.write(text)
         log(f'{os.path.basename(d)} {msg}')
 
+    def wants_suite(d, st):
+        """LOCAL_SUITE=shared and the change touches shared code. A git error here refuses the folder."""
+        try:
+            return suite_wanted(st['worktree'], st['head'])
+        except SystemExit as e:
+            refuse(d, f'{e}\n', 'could not tell whether the local suite is needed')
+            return None
+
+    def ci_wait(d, wait_min=None):
+        cmd = [sys.executable, '-I', SELF, 'ci', d] + (['--wait-min', str(wait_min)] if wait_min is not None else [])
+        r = sp.run(cmd, capture_output=True, text=True, env=os.environ)
+        with open(f'{d}/ci.log', 'a') as o:
+            o.write(time.strftime('%F %T ') + r.stdout + r.stderr)
+        log(f'{os.path.basename(d)} ci rc={r.returncode} {(r.stdout + r.stderr).strip()[-200:]}')
+        return r.returncode
+
+    def all_dirs():
+        return [d.rstrip('/') for d in sorted(glob.glob(f'{R}/pr*/')) + (sorted(glob.glob(f'{NEWDIR}/*/')) if NEWDIR else [])]
+
     log('driver start')
     while not os.path.exists(f'{R}/stop-driver'):
         did = False
-        dirs = sorted(glob.glob(f'{R}/pr*/')) + (sorted(glob.glob(f'{NEWDIR}/*/')) if NEWDIR else [])
+        dirs = all_dirs()
+        for d in [x for x in dirs if os.path.exists(f'{x}/CI-PENDING')]:
+            ci_wait(d, 0)  # CI still running at the last look: one poll each pass
         for d in dirs:
-            d = d.rstrip('/')
             st = ready(d)
             if not st:
                 continue
             key = (d, st['head'])
             tries[key] = tries.get(key, 0) + 1
             if tries[key] > 2:
-                refuse(d, 'Full suite failed twice outside the known flaky files; see suite.log / suite.json.\n',
-                       'refused after 2 tries')
+                refuse(d, 'Local suite (LOCAL_SUITE=shared) failed twice outside the known flaky files; '
+                       'see suite.log / suite.json.\n', 'refused after 2 tries')
                 continue
             did = True
             wt = st['worktree']
-            # cheap pre-check before spending a full suite: textual conflict with current upstream main
+            # cheap pre-check: textual conflict with current upstream main
             sp.run(['git', 'fetch', '-q', UP_REMOTE, 'main'], cwd=wt)
             mt = sp.run(['git', 'merge-tree', '--write-tree', '--name-only', f'{UP_REMOTE}/main', st['head']],
                         cwd=wt, capture_output=True, text=True)
             if mt.returncode:
-                refuse(d, f'CONFLICT with current {UP_REMOTE}/main (pre-suite check); rebase needed.\n' + mt.stdout[-1500:],
-                       'pre-check: conflicts with upstream main; skipped suite')
+                refuse(d, f'CONFLICT with current {UP_REMOTE}/main (pre-check); rebase needed.\n' + mt.stdout[-1500:],
+                       'pre-check: conflicts with upstream main')
                 continue
-            if not suite(d, st):
-                log(f'{os.path.basename(d)} no suite.json')
+            need_suite = wants_suite(d, st)
+            if need_suite is None:
                 continue
-            fl = failures(d, st)
-            real = [f for f in fl if f not in KNOWN]
-            if real:
-                # Rerun the failing files alone: still failing = real, refuse now instead of a second full run.
-                solo = {f: sp.run(VITEST + [f], cwd=wt, env=suite_environment(), capture_output=True, text=True) for f in real}
-                hard = [f for f, r in solo.items() if r.returncode]
-                if hard:
-                    refuse(d, 'Real failures (fail again when run alone): ' + ', '.join(hard) + '\n\n'
-                           + '\n'.join(solo[f].stdout[-1500:] for f in hard), f'real failures {hard} (confirmed solo); refused')
+            if need_suite:
+                if not suite(d, st):
+                    log(f'{os.path.basename(d)} no suite.json')
                     continue
-                log(f'{os.path.basename(d)} failures {real} pass solo; running the suite again')
-                os.remove(f'{d}/suite-head.txt')
-                continue
-            for f in fl:
-                lg = f'{d}/rerun-{os.path.basename(f)}.log'
-                for attempt in range(3):  # known flaky files: up to 3 solo tries; publish still needs a passing log
-                    r = sp.run(VITEST + [f], cwd=wt, env=suite_environment(), capture_output=True, text=True)
-                    with open(lg, 'w') as o:
-                        o.write(st['head'] + '\n' + r.stdout + r.stderr)
-                    log(f'{os.path.basename(d)} rerun {f} try {attempt + 1}: rc={r.returncode}')
-                    if r.returncode == 0:
-                        break
+                fl = failures(d, st)
+                real = [f for f in fl if f not in KNOWN]
+                if real:
+                    # Rerun the failing files alone: still failing = real, refuse now instead of a second full run.
+                    solo = {f: sp.run(VITEST + [f], cwd=wt, env=suite_environment(), capture_output=True, text=True) for f in real}
+                    hard = [f for f, r in solo.items() if r.returncode]
+                    if hard:
+                        refuse(d, 'Real failures (fail again when run alone): ' + ', '.join(hard) + '\n\n'
+                               + '\n'.join(solo[f].stdout[-1500:] for f in hard), f'real failures {hard} (confirmed solo); refused')
+                        continue
+                    log(f'{os.path.basename(d)} failures {real} pass solo; running the suite again')
+                    os.remove(f'{d}/suite-head.txt')
+                    continue
+                for f in fl:
+                    lg = f'{d}/rerun-{os.path.basename(f)}.log'
+                    for attempt in range(3):  # known flaky files: up to 3 solo tries; publish still needs a passing log
+                        r = sp.run(VITEST + [f], cwd=wt, env=suite_environment(), capture_output=True, text=True)
+                        with open(lg, 'w') as o:
+                            o.write(st['head'] + '\n' + r.stdout + r.stderr)
+                        log(f'{os.path.basename(d)} rerun {f} try {attempt + 1}: rc={r.returncode}')
+                        if r.returncode == 0:
+                            break
             cmd = [sys.executable, '-I', SELF, 'publish' if is_new(d) else 'repair', d]
             r = sp.run(cmd, capture_output=True, text=True, env=os.environ)
             with open(f'{d}/push-dry.log', 'w') as o:
@@ -775,9 +1065,11 @@ def loop(R, NEWDIR):
             if r.returncode:
                 with open(f'{d}/PUSH-REFUSED.md', 'w') as o:
                     o.write(r.stdout + r.stderr)
+            else:
+                ci_wait(d)  # the CI gate on the head just pushed
             break  # one publication per pass; rescan folders from the top
         if not did:
-            if os.path.exists(f'{R}/_done-round'):
+            if os.path.exists(f'{R}/_done-round') and not any(os.path.exists(f'{x}/CI-PENDING') for x in all_dirs()):
                 log('done; exit')
                 break
             time.sleep(120)
@@ -792,6 +1084,9 @@ def main():
         return publish(a[1], '--go' in a)
     if a[0] == 'repair' and len(a) >= 2:
         return repair(a[1], '--go' in a)
+    if a[0] == 'ci' and len(a) >= 2:
+        w = float(a[a.index('--wait-min') + 1]) if '--wait-min' in a else None
+        sys.exit(ci(a[1], w))
     if a[0] == 'addressed' and len(a) >= 2:
         sys.exit(addressed(a[1:]))
     if a[0] == 'run' and '--round-dir' in a:

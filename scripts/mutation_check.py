@@ -9,6 +9,7 @@ Run from the repo root:  python3 scripts/mutation_check.py
 Exit 0 = every mutation was caught by at least one test.
 """
 import os
+import re
 import subprocess as sp
 import sys
 import tempfile
@@ -46,6 +47,19 @@ MUTATIONS = [
     ('only listed maintainers count', '        return login in maint\n', '        return True\n'),
     ('who closed it must count', '            if counts(who):\n', '            if True:\n'),
     ('placeholders in the body', '    if holes:\n', '    if False:\n'),
+    ('in-review push guard', "    not_in_review(n, v['headRefOid'])\n", '    pass\n'),
+    ('in-review guard matches the head', 'if any(head.lower().startswith(w) for w in words):', 'if False:'),
+    ('in-review guard: batch and group only', "if not str(p.get('headRefName') or '').startswith(IN_REVIEW_PREFIXES):",
+     'if False:'),
+    ('secret-fixture hits refuse', "    need(not hits, 'secret-shaped text", "    need(True, 'secret-shaped text"),
+    ('missing secret rules refuse', "need(r.returncode == 0 and 'PATTERNS' in r.stdout,", 'need(True,'),
+    ('CI green needs every conclusion ok', "bad = [r for r in runs if r.get('conclusion') not in CI_OK]", 'bad = []'),
+    ('CI waits until every run is complete', "if not runs or any(r.get('status') != 'completed' for r in runs):",
+     'if not runs:'),
+    ('CI reads the pushed head only', "f'repos/{UP}/commits/{head}/check-runs", "f'repos/{UP}/commits/{head[::-1]}/check-runs"),
+    ('CI log excerpt is masked', "return TOKEN_SHAPE.sub('[masked]', ", 'return (lambda s: s)('),
+    ('local suite for shared paths', 'return any(fnmatch.fnmatchcase(f, g) for f in changed_files(wt, head) for g in globs)',
+     'return False'),
 ]
 
 
@@ -62,13 +76,18 @@ def main():
     with tempfile.TemporaryDirectory() as t:
         os.makedirs(os.path.join(t, 'scripts', 'publish'))
         os.symlink(os.path.join(ROOT, 'templates'), os.path.join(t, 'templates'))
+        # the driver loads scripts/loopenv.py and runs scripts/publish/secret_check.mjs next to itself;
+        # without them every test errors and every mutation would look caught
+        os.symlink(os.path.join(ROOT, 'scripts', 'loopenv.py'), os.path.join(t, 'scripts', 'loopenv.py'))
+        os.symlink(os.path.join(ROOT, 'scripts', 'publish', 'secret_check.mjs'),
+                   os.path.join(t, 'scripts', 'publish', 'secret_check.mjs'))
         path = os.path.join(t, 'scripts', 'publish', 'driver.py')
         for gate, old, new in MUTATIONS:
             with open(path, 'w') as f:
                 f.write(src.replace(old, new))
             r = sp.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_driver.py', '-q'], cwd=ROOT,
                        env=dict(os.environ, DRIVER_PATH=path), capture_output=True, text=True)
-            caught = r.returncode != 0
+            caught = r.returncode != 0 and not re.search(r'Ran [01] tests?\b', r.stderr)  # a failing test, not an import error
             print(f"{'caught  ' if caught else 'SURVIVED'} {gate}")
             if not caught:
                 survived.append(gate)

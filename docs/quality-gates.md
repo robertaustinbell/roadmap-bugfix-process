@@ -1,9 +1,20 @@
 # Quality gates
 
-Every loop PR passes these gates at its exact final head before it opens. The
-[Bug fixer](../agents/bug-fixer.md) runs them. The
+Every loop PR passes these gates at its exact final head before it opens, and the
+CI gate after the push. The [Bug fixer](../agents/bug-fixer.md) runs them, the
+[adversary](../agents/adversary.md) tries to break the change, and the
 [independent reviewer](../agents/independent-reviewer.md) checks the receipts. A
 human never has to rerun them to trust them.
+
+The order, before opening or pushing: confirmed bug (a test that fails on a fresh
+`upstream/main` for the stated reason, then passes with the fix); targeted tests;
+typechecks; changed-line mutants and CRAP; the incremental review; the secret-fixture
+check; the adversarial pass; the independent review. The publisher then checks the
+in-review guard, pushes, and waits for CI on the pushed head. The local full suite is
+no longer a gate: the maintainer's CI runs the whole suite on every push (about three
+minutes), and the PRs he sent back had all passed a local full suite. What he found
+were logic gaps and ACs that promised more than the code did, which is what the
+adversarial pass is for.
 
 The gates come from the code standard ([code-standard.md](code-standard.md)). This
 page says how to run them on one PR. If the two disagree, the code standard wins
@@ -18,8 +29,12 @@ and the disagreement is reported to Austin.
 - [Gate 2: CRAP](#gate-2-crap)
 - [Gate 3: mutation ratchet](#gate-3-mutation-ratchet)
 - [Gate 4: incremental review](#gate-4-incremental-review)
+- [Secret-shaped fixtures](#secret-shaped-fixtures)
+- [Adversarial pass](#adversarial-pass)
+- [CI gate (after the push)](#ci-gate-after-the-push)
 - [Test evidence that goes with the gates](#test-evidence-that-goes-with-the-gates)
 - [Overall result and the ledger](#overall-result-and-the-ledger)
+- [Quality tally](#quality-tally)
 - [What is not a gate](#what-is-not-a-gate)
 - [Pitfalls](#pitfalls)
 
@@ -246,6 +261,58 @@ read-only, on `<pinned base>...<head>`.
    one-fix PR.
 7. Incremental scores are not comparable with a full-audit score.
 
+## Secret-shaped fixtures
+
+No test value may look like a real credential: no `ghp_`, `github_pat_`, `sk-...` or
+`"Key..., 'x'"`-style fixtures. Use plain strings such as `test-token-good`. The
+maintainer's batch tool refuses a batch whose added lines hold one, so a single
+fixture stalls every PR grouped with it.
+
+The publisher checks this before every push, with the roadmap repo's own rules:
+`tools/secret-rules.mjs` (its `PATTERNS`) as it is on `upstream/main`, plus the generic
+key rule from `tools/merge-batch.mjs`, run on the lines the change adds compared with
+`upstream/main` ([`secret_check.mjs`](../scripts/publish/secret_check.mjs)). A hit
+refuses and names `file:line` and the rule, never the value. If the rules file is
+missing, the publisher refuses rather than skipping the check. The Bug fixer runs the
+same check as a gate so the publisher never has to refuse.
+
+## Adversarial pass
+
+A fresh agent with its own context, not the fixer and not the reviewer, reviews the
+diff against the roadmap repo's `docs/review-format.md` (the maintainer's review
+contract) and tries to break the fix: other tabs, other devices, stalled or partial
+network bodies, quoted or odd inputs, older Safari, erase during save, retries.
+Template: [adversary.md](../agents/adversary.md). It writes `adversary.md` in the fix
+folder, naming the head, with findings in two groups:
+
+- **Blocking**: back to the fixer. Fix with RED then GREEN, rerun the affected gates,
+  and run a new adversarial pass at the new head.
+- **Residual**: a case the fix does not cover. It stays only if it is written into the
+  AC text and the PR body's **Known limits** line, so no AC promises more than the
+  code does.
+
+The independent reviewer checks that `adversary.md` exists for the reviewed head and
+that every residual appears in the AC and the body. A repair gets an adversarial pass
+on its delta too.
+
+## CI gate (after the push)
+
+The publisher waits for every check run on the exact head it pushed (polling, usually
+3 to 15 minutes; `CI_WAIT_MIN`, default 20):
+
+| Result | What happens |
+|---|---|
+| Every run `success`, `skipped` or `neutral` | `CI-GREEN` in the folder, a line in `ci.jsonl`, and "PR #N ready, head `<sha>`" in `$STATE_DIR/report-outbox.txt` for the Coordinator to post |
+| Any other result | `CI-RED.md` with the failing job names and a short log excerpt (token-shaped text masked). The PR goes back to a repair fixer; push again only after repair and review |
+| Still running at the timeout | `CI-PENDING`, polled again on every driver pass |
+
+Never report a red head. CI is a gate for reporting a head as ready; it is never an
+approval. Details: [publishing.md](publishing.md#the-ci-gate).
+
+The optional local full suite (`LOCAL_SUITE=shared`, default off) runs only when the
+change touches shared record, sync or storage code (`SHARED_SUITE_PATHS`; by default
+health-core merge, sync and record-session files and widget-src storage files).
+
 ## Test evidence that goes with the gates
 
 The gates do not replace tests. Every PR also carries:
@@ -260,21 +327,28 @@ The gates do not replace tests. Every PR also carries:
   a test fails (`reverted_changes_detected` in the review). A change no test notices
   is either unneeded or untested.
 - **GREEN:** the same test passes at head.
-- **Targeted tests:** every test file that imports a changed file passes at head.
+- **Targeted tests:** the PR's own tests, every test file that imports a changed file,
+  every test file that **names** a changed file (a plain text search: some tests read a
+  file by name and import nothing), and the user-stories tests, all passing at head.
+  Count the files before running; an empty list runs the whole suite. `--maxWorkers=1`
+  or `2`, `TZ=UTC`, CI's Node version.
+- **Typechecks** for every project the change touches (widget-src, health-core,
+  server, engine).
 - **Tests that pin the bug are flipped first.** An existing test that asserts the
   buggy behaviour is changed in its own commit, before the fix, with a note of why
   its old expectation was wrong.
 - **Removing or weakening a test is accounted for.** The PR body names each deleted
   or loosened assertion, what it protected, and where that is covered now.
-- **Full suite:** passes at the exact head, run as described in
-  [validation-and-sandbox.md](validation-and-sandbox.md#full-suite). The receipt
-  names the new test and shows it ran.
+- **CI on the pushed head:** every check passes
+  ([CI gate](#ci-gate-after-the-push)). The local full suite is not part of the
+  evidence unless the operator turned it on for shared code
+  ([validation-and-sandbox.md](validation-and-sandbox.md#optional-local-full-suite)).
 - **Base CI that was already red** is reported apart from the PR's own result: the
   failing job, that it fails on base too, and that the PR does not touch it.
 
-Run the gates after the fix is final and before the last full suite. A later gate
-commit that adds only tests or docs keeps the suite result. One that changes
-production code needs a new full suite at the new head.
+Run the gates after the fix is final. A later commit that adds only tests or docs
+needs its targeted tests rerun; one that changes production code needs every gate and
+an adversarial pass again at the new head. CI runs again on every push.
 
 ## Overall result and the ledger
 
@@ -312,13 +386,33 @@ intent. It flags, for the reviewer to justify or remove:
 A flag is not a failure. An unexplained flag is a `must_fix` for the reviewer
 (`single_fix_scope: no`).
 
+## Quality tally
+
+The real quality measure is what the maintainer's review finds. After each review
+result (merged, or sent back with findings), record one line in the PR quality ledger
+with [`scripts/data/quality_ledger.py`](../scripts/data/quality_ledger.py):
+
+```sh
+python3 scripts/data/quality_ledger.py record --pr 812 --head <full sha he reviewed> \
+  --outcome sent_back --findings 2 --category ac_overpromise --category cross_tab
+python3 scripts/data/quality_ledger.py tally
+```
+
+Fields: PR, head reviewed, outcome (`merged`, `sent_back`, `closed`), number of
+findings, and their categories: `ac_overpromise`, `cross_tab`, `stalled_body`,
+`input_parsing`, `secret_fixture`, `ac_number_reuse`, `other`. The file is
+`$STATE_DIR/pr-quality.jsonl`. `tally` gives the counts per outcome and category and
+the share of reviewed PRs merged with no findings. A category that keeps coming back
+names the gate to strengthen.
+
 ## What is not a gate
 
 - **Duplication (`dryer`).** Not adopted for per-PR gating. The code standard draft
   lists it; until Austin adopts it, it is advisory only.
 - **A coverage percentage.** Coverage selects tests and validates CRAP inputs.
   Agents can reach any percentage with assertion-light tests.
-- **CI status or a bot comment.** These are data, not approval.
+- **A bot comment, or CI status as approval.** CI on the pushed head is a gate for
+  reporting the head as ready; it never approves anything, and neither does a bot.
 
 ## Pitfalls
 

@@ -43,7 +43,7 @@ import tempfile
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROLES = ('finder', 'decider', 'bug-fixer', 'repair', 'independent-reviewer', 'coach', 'drop-recheck')
+ROLES = ('finder', 'decider', 'bug-fixer', 'repair', 'adversary', 'independent-reviewer', 'coach', 'drop-recheck')
 ROLE_KEEP = ('PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'TMPDIR')
 NEVER_PASS = re.compile(r'^(GH_|GITHUB_|SSH_|GIT_)|TOKEN$', re.I)
 FINDER_TOOLS = {  # finder: (setting, must be a folder or a file)
@@ -190,6 +190,10 @@ def preflight(finders, offline):
             probs.append('cannot tell which Node CI uses (no .nvmrc, .node-version or node-version: in workflows)')
         elif not v.lstrip('v').startswith(major + '.'):
             probs.append(f'node is {v}, CI uses {major} ({src}); set NODE_BIN_DIR')
+        rc, _, _ = sh(['git', '-C', wd, 'cat-file', '-e', 'upstream/main:tools/secret-rules.mjs'])
+        if rc:
+            probs.append('tools/secret-rules.mjs is not on upstream/main in WORKDIR; the publisher refuses every '
+                         'push without it (fetch upstream)')
         lock = os.path.join(wd, 'package-lock.json')
         stamp = os.path.join(wd, 'node_modules', '.package-lock.json')
         if os.path.exists(lock) and not (os.path.exists(stamp) and os.path.getmtime(stamp) >= os.path.getmtime(lock)):

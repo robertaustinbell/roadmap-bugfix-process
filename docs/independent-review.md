@@ -105,7 +105,7 @@ The same bar as for bugs ([evidence-bar.md](evidence-bar.md)):
 
 | Verdict | Next step |
 |---|---|
-| `approve` | Gates and full suite at this head, then the PR may open |
+| `approve` | The publisher's checks at this head, then the PR may open; CI on the pushed head before it is reported ready |
 | `changes` | Before the PR opens: one pre-PR repair, then a delta review ([repair-rounds.md, pre-PR](repair-rounds.md#pre-pr-repair-reviewer-asked-for-changes)). After the PR opens: only a human's request starts a repair |
 | `needs_decision` | Human-review list with the question |
 | `could_not_review` | Missing inputs, broken harness, or head moved. Fix the cause and review again |

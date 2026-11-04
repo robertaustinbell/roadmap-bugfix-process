@@ -17,7 +17,10 @@ needs a new review.
 - Short. Put long logs in the fix folder, not the body. One line for all gates.
 - Every number matches a receipt at the current head. When the head moves, every
   SHA and count in the body is updated in the same step.
-- Never "full suite not yet run" beside a finished run.
+- Never "CI not yet run" beside a finished run. Write the CI line as
+  ``CI at `<12-char head>`: pending``; the publisher fills it in once every check on the
+  pushed head has passed. Nothing says CI passed before it has.
+- No secret-shaped test values quoted anywhere (`ghp_`, `github_pat_`, `sk-...`).
 - No `VERDICT:` string anywhere in the body, comments or quoted text (see
   [independent-review.md](independent-review.md#where-the-verdict-lives-and-where-it-must-not)).
 - Synthetic examples only. No real health data, no personal data, no local paths,
@@ -30,7 +33,9 @@ needs a new review.
 ## Summary
 
 Two to four sentences: what the user saw, why it happened, what changed. Link the
-user story acceptance criterion it restores (for example `US-12 AC17`).
+user story acceptance criterion it restores (for example `US-12 AC17`). A new AC takes
+the next number free on `main` for that story, checked again right before the PR
+opens, and the branch starts from a fresh `upstream/main`.
 
 ## Testing
 
@@ -42,12 +47,18 @@ In this order:
 3. **Controls.** The neighbouring behaviours kept as passing controls.
 4. **Gates.** One line: tsc, incremental review, CRAP, changed-line mutants. Name
    any equivalent mutant with its reason.
-5. **Full suite** at `<head>`: passed / skipped / failed. If a known
-   load-sensitive file was accepted by a solo rerun, say which file and that it
-   passed alone at the same head.
-6. **Live check**, if any, with its evidence level from
+5. **Targeted tests** at `<head>`: how many files (the PR's tests, every importer of
+   each changed file, every file that names a changed file, the user-stories tests)
+   and passed / skipped / failed.
+6. **CI** at `<head>`: `pending` until the publisher sees every check pass on the
+   pushed head, then `all checks passed (link)`. A local full suite is not reported
+   unless the operator turned it on for shared code.
+7. **Known limits.** One line naming every residual from the adversarial pass, in the
+   same words as the AC, so the AC and the body promise the same thing and no more.
+   "None found by the adversarial pass" when there are none.
+8. **Live check**, if any, with its evidence level from
    [validation-and-sandbox.md](validation-and-sandbox.md#3-live-validation).
-7. **Not tested.** Surfaces the evidence does not reach (real browser close,
+9. **Not tested.** Surfaces the evidence does not reach (real browser close,
    Safari, the phone, the deployed service).
 
 ## Risk

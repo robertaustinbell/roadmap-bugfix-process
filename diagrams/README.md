@@ -30,8 +30,9 @@ flowchart LR
     H["Human review list<br/>suspected, policy, clinical,<br/>schema, product decisions"]
     S[Private security report]
     B["Bug fixer<br/>one fix per PR, code standard<br/>gates: strict tsc, CRAP,<br/>mutation, incremental review"]
+    A["Adversary<br/>fresh agent tries to break the fix<br/>residuals go into the AC"]
     R[Fresh reviewer<br/>approves one commit<br/>plus the PR text]
-    PUB["Publish driver<br/>refuses unless approval, gates,<br/>suite and scrub all match<br/>never merges"]
+    PUB["Publish driver<br/>refuses unless approval, gates,<br/>secret check and scrub all match<br/>never pushes in Brad's review<br/>waits for CI green; never merges"]
     P["PRs<br/>Testing / Risk / How to revert<br/>no PR limit"]
     M["Brad<br/>merge / close / ask for a fix"]
   end
@@ -47,8 +48,10 @@ flowchart LR
   D -- "below bar / needs decision" --> H
   D -- security --> S
   H -- "Austin or Brad decides" --> B
-  B -- gates pass --> R -- approve --> PUB --> P --> M
+  B -- gates pass --> A -- no blocker --> R -- approve --> PUB --> P --> M
+  A -- blocking --> B
   R -- changes --> B
+  PUB -- "CI red" --> B
   M -- "fix requested: repair, max 2-3 rounds, new changes only" --> B
   M -- "outcomes + reasons" --> D
   M -- all addressed --> C

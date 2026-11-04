@@ -26,10 +26,13 @@ missing.
 | `pr-body.md` | yes | The draft description |
 | `gates.json` | yes | Valid against [verdict.schema.json](../templates/verdict.schema.json) for this head |
 | `commands.md` | yes | How to run the regression, targeted tests and mutants |
+| `adversary.md` | yes | The [adversary](adversary.md)'s blocking findings and residuals for this head |
 | `round` | yes | 1 for a first review |
 | Round 2+: `delta.patch` or `range-diff.txt`, all earlier `review-*.json` | yes for round 2+ | So you review only the delta and never repeat a finding |
 
-Do not read the fixer's notes, transcript or reasoning, even if present.
+Do not read the fixer's notes, transcript or reasoning, even if present. `adversary.md`
+is not the fixer's reasoning: it is another fresh agent's attack on the change, and you
+check it.
 
 Coach feedback: `python3 scripts/coach/items.py open independent-reviewer` lists advice
 about how you review (never about this fix, and never a verdict). Use it, and reply to each
@@ -57,7 +60,7 @@ Compute each `text_sha256` value from the file as it is on disk when you finish,
     "red_at_base": "yes", "green_at_head": "yes", "protected_tests_untouched": "yes",
     "claims_match_assertions": "yes", "single_fix_scope": "yes",
     "all_sibling_sites_fixed": "yes", "gate_numbers_plausible": "yes",
-    "risk_label_correct": "yes", "no_owner_decision_made": "yes",
+    "risk_label_correct": "yes", "no_owner_decision_made": "yes", "adversary_residuals_in_ac": "yes",
     "reverted_changes_detected": [{ "change": "<file:line, short>", "failing_tests": 2 }]
   },
   "text_sha256": { "pr-title.txt": "<64-hex>", "pr-body.md": "<64-hex>" },
@@ -86,7 +89,7 @@ Write it to the fix folder. Validate it against the schema before you finish.
    If not, stop with `could_not_review`.
 2. **Make a scratch copy** of the worktree with its `node_modules`. Run `git init`
    and one commit inside it if it has no `.git`. Never run tests in the worktree
-   itself; a publisher may be running the full suite there.
+   itself; a publisher may be checking it.
 3. **Read the contract.** From `finding.json`: contract, expected, actual, trigger.
 4. **RED at base, GREEN at head.** In the scratch copy, put production files back
    to `base` (keep the new tests) and run the regression. It must fail on the
@@ -101,24 +104,31 @@ Write it to the fix folder. Validate it against the schema before you finish.
 8. **Claims against assertions.** For every claim in `pr-body.md`, test names and
    acceptance text, find the assertion that proves it. A claim broader than its
    assertion is `must_fix` (add the assertion or narrow the words).
-9. **Numbers.** Check the counts in `pr-body.md` and `gates.json` against the
+9. **Adversarial pass.** `adversary.md` must exist and be for this head: its `Head:` line
+   is `head`, or the only commits after it change AC lines in `docs/user-stories.md`.
+   Missing or for another head: `could_not_review`. A blocking finding it lists that the
+   head does not resolve is `must_fix`. Every residual must appear, in substance, in the
+   AC text and in the PR body's **Known limits** line; a missing one is `must_fix` (the AC
+   would promise more than the code does). Record the result as
+   `adversary_residuals_in_ac`.
+10. **Numbers.** Check the counts in `pr-body.md` and `gates.json` against the
    receipts and your own runs. Misreported counts are `must_fix`.
-10. **Siblings.** Search the repo for the same bug pattern. Unfixed sites of the
+11. **Siblings.** Search the repo for the same bug pattern. Unfixed sites of the
     same pattern are `must_fix`, listed in `same_pattern_sites`.
-11. **Scope and risk.** One fix only. Risk label matches what the change touches
+12. **Scope and risk.** One fix only. Risk label matches what the change touches
     ([pr-description-template.md](../docs/pr-description-template.md#risk)).
-12. **Owner decisions.** If the fix chooses clinical meaning, schema, merge/FHIR,
+13. **Owner decisions.** If the fix chooses clinical meaning, schema, merge/FHIR,
     security policy, or product behaviour, add a `needs_decision` finding with one
     question.
-13. **Round 2 and later (delta).** Review only `delta.patch` (or
+14. **Round 2 and later (delta).** Review only `delta.patch` (or
     `range-diff.txt`). For each earlier finding ID, put it in `resolved` or
     `still_open`. New problems in lines the delta did not touch are
     `pre_existing`. Never re-report an earlier finding under a new ID.
-14. **Pick the verdict:**
+15. **Pick the verdict:**
     - any `must_fix`, a non-optional `should_fix`, or anything in `still_open` → `changes`
     - else any `needs_decision` → `needs_decision`
     - else → `approve`
-15. Write and validate `review-<round>.json`.
+16. Write and validate `review-<round>.json`.
 
 ## Rules / never
 
@@ -131,7 +141,7 @@ Write it to the fix folder. Validate it against the schema before you finish.
 - Never edit the worktree, never commit, never push, never merge.
 - Never post to GitHub. Never write the string `VERDICT:` in any file that could be
   posted (PR bodies, comments). Your verdict lives only in the JSON file.
-- Never run the full suite. The driver owns it.
+- Never run the whole suite. CI runs it on the pushed head.
 - Never put a finding about unchanged code into `must_fix`. Classify it
   `pre_existing`; the repair agent sends it to the finders.
 - Never re-report a finding already raised in an earlier round.
@@ -148,6 +158,7 @@ Write it to the fix folder. Validate it against the schema before you finish.
 Stop and return `could_not_review` with a reason when:
 
 - the head moved while you worked;
+- `adversary.md` is missing or is for another head;
 - RED cannot be shown at base because the harness fails to load;
 - required inputs are missing or invalid against their schemas;
 - you cannot run tests (missing dependencies, broken sandbox).
@@ -157,8 +168,8 @@ maintainer can make.
 
 ## Handoff
 
-- `approve` → the driver runs gates (if not already at this head) and the full
-  suite, then the publisher may open or update the PR.
+- `approve` → the publisher runs its checks (secret fixtures, in-review guard, merge
+  state), opens or updates the PR, then waits for CI on the pushed head.
 - `changes` → the [repair agent](repair.md). Before the PR is open: one pre-PR
   repair round. After it is open: only if Austin or Brad asked.
 - `needs_decision` → the human-review list with your question.
