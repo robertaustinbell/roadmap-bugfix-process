@@ -148,6 +148,24 @@ Also:
    id is left without a route.
 12. **Write the calibration note** and hand off.
 
+## Re-freeze a stale witness
+
+Only when a Bug fixer stopped with `witness-stale` and the owner said yes (logged with
+`session.py say`). The kit or `main` changed after the pin, so the witness fails for a
+reason that has nothing to do with the bug.
+
+1. Change only the test's setup (fixtures, sample settings, imports). `claim_verbatim`
+   and every assertion stay the same, word for word.
+2. Move the old witness to `witness/<id>/superseded-<old-pin>/`; never delete it.
+3. Run the new witness on the unfixed code the fixer used as base, in a scratch copy:
+   it must fail on the claim, and its controls must pass.
+4. Write the new `SHA256SUMS` and `red.json`. Update only this decision in
+   `decisions.json`: the new `witness.sha256` and a `refrozen` note (reason, old and new
+   pin, the owner's words). Add a dated line to `calibration.md`.
+
+Then the Bug fixer reruns every gate. A re-freeze that would change what is asserted is a
+new decision, not a re-freeze.
+
 ## Rules and nevers
 
 - Always confirm before any fix. No "obvious" exceptions.

@@ -26,6 +26,7 @@ missing.
 | `pr-body.md` | yes | The draft description |
 | `gates.json` | yes | Valid against [verdict.schema.json](../templates/verdict.schema.json) for this head |
 | `commands.md` | yes | How to run the regression, targeted tests and mutants |
+| | | Check `finding.json` and `gates.json` with `python3 scripts/check_json.py FILE finding` / `verdict` before you start; a file that does not validate, or that could not be checked, means stop and say so |
 | `adversary.md` | yes | The [adversary](adversary.md)'s blocking findings and residuals for this head |
 | `round` | yes | 1 for a first review |
 | Round 2+: `delta.patch` or `range-diff.txt`, all earlier `review-*.json` | yes for round 2+ | So you review only the delta and never repeat a finding |

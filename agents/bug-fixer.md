@@ -43,6 +43,7 @@ Folder `$STATE_DIR/rounds/$ROUND/fixes/<slug>/`:
 | `receipt.json` | `{"base","head","witness_sha256","red":{"failed":n,"passed":n},"green":{...},"tsc":{...},"crap":[{"fn","base","head","scope"}],"mutants":{"killed":n,"total":n,"equivalent":[...]},"fmsm":{"new_medium_plus":0,"dimensions":{"<dim>":"better|same|worse"}},"targeted":{"head","files":n,"passed","skipped","failed","named_by_text":[...]},"secret_scan":"pass|fail|did-not-run","secret_fixtures":"pass|fail|did-not-run"}`. CI results are not yours: the publisher writes `CI-GREEN` or `CI-RED.md` after the push. |
 | `gates.md` | Human-readable gate results. Append a new section per head; never edit an old result away. |
 | `fix.patch` | The exact diff, including new test files. |
+| `finding.json`, `gates.json`, `commands.md` | What the [independent reviewer](independent-reviewer.md) needs: the confirmed finding ([schema](../templates/finding.schema.json), status `confirmed`), your gate results for this head ([schema](../templates/verdict.schema.json), every number from a log you kept), and the exact commands for the regression, targeted tests and mutants. Check both JSON files with `python3 scripts/check_json.py`. Without all three the reviewer cannot start. |
 | `pr-title.txt`, `pr-body.md` | PR text in the [required format](../docs/code-standard.md#6-pull-request-body). |
 | `adversary.md` | Written by the [adversary](adversary.md), not you: blocking findings and residuals for this head. |
 | `READY-FOR-REVIEW` | The head SHA, written when you want an independent review. |
@@ -64,7 +65,11 @@ their new location in the repo.
    the Decider used stand-ins (`witness_runner: "stand-in"`); only this run counts as
    `red_at_base`. It must fail on the asserted claim. If it
    passes, write `NOT-REPRODUCED.md` (measurements, `main` SHA, whether Brad's own
-   commit fixed it) and stop.
+   commit fixed it) and stop. If it still shows the bug but fails or errors for an
+   unrelated reason (its setup fell behind `main`, for example a new required setting),
+   do not edit it: write `HELD-FOR-HUMAN.md` with category `witness-stale` and the exact
+   unrelated failure. The Decider re-freezes it on the owner's yes (see
+   [decider.md](decider.md), "Re-freeze a stale witness").
 3. **Check for a recorded decision.** Search the story text and `git log --grep` for
    a maintainer decision covering this behaviour. If the fix would reverse one, write
    `DECISION-NEEDED.md` (options, recommendation) and stop.
@@ -237,6 +242,7 @@ Write the stop file, add a human review entry, and stop work on this fix when:
 | Witness no longer fails on current `main` | `NOT-REPRODUCED.md` | none (record only) |
 | Fix would reverse a written decision, or needs a product choice | `DECISION-NEEDED.md` | `written-decision` / `policy-or-behaviour` |
 | An existing test pins the bug | `HELD-FOR-HUMAN.md` | `test-pins-bug` |
+| The frozen witness fails for a reason unrelated to the bug | `HELD-FOR-HUMAN.md` | `witness-stale` |
 | Gates cannot pass without refactoring legacy code, or a touched FMSM dimension gets worse | `HELD-FOR-HUMAN.md` | `gate-worse` |
 | Repair cap reached | `HELD-FOR-HUMAN.md` | `repair-cap` |
 | Brad or his agent says he is taking over, or `main` already has the fix | `HOLD.md` | none |

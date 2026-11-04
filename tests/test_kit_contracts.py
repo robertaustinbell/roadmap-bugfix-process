@@ -303,7 +303,11 @@ class CheckKit(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp()
         cls.base = os.path.join(cls.tmp, 'base')
-        shutil.copytree(ROOT, cls.base, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        # Leave out .git: in a git worktree it is a pointer file, and a copy that keeps it would
+        # stage planted files (docs/.DS_Store) in the real worktree's index. Each copy gets its
+        # own repository instead.
+        shutil.copytree(ROOT, cls.base, ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '.git'))
+        sp.run(['git', 'init', '-q'], cwd=cls.base, check=True, capture_output=True)
 
     @classmethod
     def tearDownClass(cls):

@@ -57,6 +57,8 @@ MUTATIONS = [
     ('CI waits until every run is complete', "if not runs or any(r.get('status') != 'completed' for r in runs):",
      'if not runs:'),
     ('CI reads the pushed head only', "f'repos/{UP}/commits/{head}/check-runs", "f'repos/{UP}/commits/{head[::-1]}/check-runs"),
+    ('stop files stop a folder', '        if os.path.exists(os.path.join(d, x)):\n            return x', '        if False:\n            return x'),
+    ('HELD-FOR-HUMAN is a stop file', "STOP_FILES = ('HOLD.md', 'HELD-FOR-HUMAN.md', ", "STOP_FILES = ('HOLD.md', "),
     ('CI log excerpt is masked', "return TOKEN_SHAPE.sub('[masked]', ", 'return (lambda s: s)('),
     ('local suite for shared paths', 'return any(fnmatch.fnmatchcase(f, g) for f in changed_files(wt, head) for g in globs)',
      'return False'),

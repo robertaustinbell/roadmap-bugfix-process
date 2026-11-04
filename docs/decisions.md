@@ -5,6 +5,22 @@ Each entry names the decision it feeds and its removal condition, per
 [adding a rule, a field or a gate](scorecard-and-test-set.md#adding-a-rule-a-field-or-a-gate).
 Rules live in their own pages; this page records why they are there.
 
+## 2026-11-04: fixes from the kit's own self-test
+
+A manual round of the loop on the kit's own code (two fixes taken through repair and
+independent review, local branches only) found these gaps.
+
+| Change | Why | Undo when |
+|---|---|---|
+| The publish driver honours every stop file (`STOP_FILES`: `HOLD.md`, `HELD-FOR-HUMAN.md`, `DECISION-NEEDED.md`, `NOT-REPRODUCED.md`, `PARKED.md`, `PUSH-REFUSED.md`); a test keeps the docs' list equal to it | The driver checked only `HOLD.md`, `PUSH-REFUSED.md` and `NOT-REPRODUCED.md`, so a Bug fixer's `HELD-FOR-HUMAN.md` did not stop it on its own, although the docs said it did | Never removed |
+| A stale witness (fails for a reason unrelated to the bug) stops the fixer with `witness-stale`; the Decider re-freezes its setup only, on the owner's yes, keeping the old one | One kit commit after the pin made a setting required, and the frozen test failed a control for that reason alone | Never removed |
+| The Bug fixer writes `finding.json`, `gates.json` and `commands.md` | The reviewer requires them and the fixer template never asked for them | Never removed |
+| `verdict.schema.json`: `not_applicable` (with a reason), and `secret_scan`, `suite` and `extra` gates that can fail the verdict | The schema fitted TypeScript only; a Python target had to record tsc as `could_not_run`, and had nowhere to put the secret scan or the suite | Never removed |
+| `scripts/check_json.py` checks role outputs: uses jsonschema, else reruns under uvx, else fails with exit 2. CI installs jsonschema so the schema tests run | No system Python had jsonschema; a check that only worked inside one agent runtime crashed three times and blocked reviews | Never removed |
+| A role prompt may add inputs or narrow scope, never relax the template; long roles get an explicit turn budget and are restarted fresh, not resumed in the Coordinator's session | A prompt saying "go through step 12" made a fixer write `READY-FOR-REVIEW` beside its hold; a repair ran out of turns at a 150-turn cap | Never removed |
+| `addressed()` closes the ledger file | The open file raised a ResourceWarning that broke a mutation tool's baseline | Never removed |
+| The check_kit tests copy the repo without `.git` and give each copy its own repository | In a git worktree the copied `.git` pointer made a test stage `docs/.DS_Store` in the real index | Never removed |
+
 ## 2026-11-04: CI replaces the local full suite; adversarial pass; in-review guard
 
 Brad's process changed: his CI runs the whole suite on six shards, plus typechecks, builds,

@@ -862,7 +862,9 @@ def ci(folder, wait_min=None, poll=None):
 def addressed(ledgers):
     nums = []
     for path in ledgers:
-        for ln in open(path):
+        with open(path) as f:
+            lines = f.read().splitlines()
+        for ln in lines:
             if ln.strip():
                 r = json.loads(ln)
                 n = r.get('number') or r.get('pr')
@@ -906,6 +908,20 @@ def addressed(ledgers):
 # run: the loop
 # ---------------------------------------------------------------------------------------------
 
+# Any one of these in a fix folder stops the driver from touching it. Roles write different ones
+# (docs/human-review-and-escalation.md); the driver honours them all, whatever wrote them.
+STOP_FILES = ('HOLD.md', 'HELD-FOR-HUMAN.md', 'DECISION-NEEDED.md', 'NOT-REPRODUCED.md', 'PARKED.md',
+              'PUSH-REFUSED.md')
+
+
+def stopped(d):
+    """The first stop file in fix folder d, or None."""
+    for x in STOP_FILES:
+        if os.path.exists(os.path.join(d, x)):
+            return x
+    return None
+
+
 def loop(R, NEWDIR):
     tries = {}
 
@@ -919,7 +935,7 @@ def loop(R, NEWDIR):
     def ready(d):
         if not os.path.exists(f'{d}/STATE.json'):
             return None
-        if any(os.path.exists(f'{d}/{x}') for x in ('HOLD.md', 'PUSH-REFUSED.md', 'NOT-REPRODUCED.md')):
+        if stopped(d):
             return None
         try:
             st = strict_load(f'{d}/STATE.json')

@@ -178,7 +178,13 @@ started you, never ask anything: work from the session as recorded.
    the Coach watch, and records what it got in `dispatch.json`. A finder must never read
    another finder's output, even if it can: independent evidence depends on it. If an agent
    can do more than [its role allows](../docs/roles.md#enforced-by-tools-not-by-prompts),
-   do not start it. They may run in parallel. Open Code Review works
+   do not start it. A role's prompt may add inputs and narrow its scope; it never relaxes
+   the role's template. In particular, never tell a role to "carry on to step N": if the
+   template says stop, it stops, and a stop file wins over everything else in the folder.
+   Give long roles (Bug fixer, Repair) a turn budget that fits their gates; a role that
+   runs out of turns leaves neither `READY-FOR-REVIEW` nor a stop file, and is restarted
+   fresh from its own `NOTES.md`, never resumed in the Coordinator's own session.
+   They may run in parallel. Open Code Review works
    through its planned parts in order until its usage or the token budget runs out.
 8. **Wait for finders.** A finder counts as run only when its `findings.json` exists
    and validates against [candidate.schema.json](../templates/candidate.schema.json); record its `run_status` and files covered. A finder

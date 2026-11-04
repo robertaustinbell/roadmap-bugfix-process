@@ -64,9 +64,12 @@ moves on to other work) when:
 9. anything suggests real personal or health data has entered loop state or output.
    (Stop everything, tell the operator, do not post.)
 
-Stop files the [Bug fixer](../agents/bug-fixer.md) and publisher respect:
-`HOLD.md`, `DECISION-NEEDED.md`, `NOT-REPRODUCED.md`, `HELD-FOR-HUMAN.md`. A folder
-with any of them is never published.
+Stop files every role and the publisher respect:
+`HOLD.md`, `HELD-FOR-HUMAN.md`, `DECISION-NEEDED.md`, `NOT-REPRODUCED.md`, `PARKED.md`,
+`PUSH-REFUSED.md`. A folder with any of them is never published, whichever role wrote it
+(the list is `STOP_FILES` in `scripts/publish/driver.py`, and a test keeps the two equal). A
+stop file wins over everything else in the folder, including a `READY-FOR-REVIEW` or an
+approved review; delete it only on the owner's logged decision.
 
 ## Questions to Brad
 

@@ -23,7 +23,7 @@ This page covers what the driver needs, what it checks, and how to deal with its
 | `review-<k>.json` | independent reviewer | [review-verdict.schema.json](../templates/review-verdict.schema.json): `verdict`, full `head`, the checks, findings, and `text_sha256` of `pr-title.txt` and `pr-body.md` |
 | `pr-title.txt`, `pr-body.md` | fixer | title under 200 characters; body with Testing, Risk, How to revert |
 | `WAIT-FOR` | optional | PR numbers that must be MERGED first (open is not enough) |
-| `HOLD.md`, `NOT-REPRODUCED.md` | anyone | the driver skips the folder |
+| Any stop file: `HOLD.md`, `HELD-FOR-HUMAN.md`, `DECISION-NEEDED.md`, `NOT-REPRODUCED.md`, `PARKED.md`, `PUSH-REFUSED.md` | anyone | the driver skips the folder ([list](human-review-and-escalation.md)) |
 
 ### Repair to an existing PR: `ROUND_DIR/pr<N>/`
 

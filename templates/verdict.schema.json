@@ -385,6 +385,51 @@
               }
             }
           }
+        },
+        "secret_scan": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateResult"
+            }
+          ],
+          "type": "object",
+          "description": "gitleaks (or the configured scanner) over the tree and the new commits."
+        },
+        "suite": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateResult"
+            }
+          ],
+          "type": "object",
+          "description": "The full test suite, with the counts in reason or raw_output.",
+          "properties": {
+            "tests_run": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "extra": {
+          "type": "array",
+          "description": "Any other gate the repo has (for example check_kit, mutation_check). Same result rules as the named gates.",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/gateResult"
+              }
+            ],
+            "type": "object",
+            "required": [
+              "name",
+              "result"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -494,6 +539,59 @@
                     }
                   }
                 }
+              },
+              {
+                "properties": {
+                  "secret_scan": {
+                    "properties": {
+                      "result": {
+                        "enum": [
+                          "fail",
+                          "could_not_run"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "secret_scan"
+                ]
+              },
+              {
+                "properties": {
+                  "suite": {
+                    "properties": {
+                      "result": {
+                        "enum": [
+                          "fail",
+                          "could_not_run"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "suite"
+                ]
+              },
+              {
+                "properties": {
+                  "extra": {
+                    "contains": {
+                      "properties": {
+                        "result": {
+                          "enum": [
+                            "fail",
+                            "could_not_run"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "extra"
+                ]
               }
             ]
           }
@@ -520,8 +618,10 @@
           "enum": [
             "pass",
             "fail",
-            "could_not_run"
-          ]
+            "could_not_run",
+            "not_applicable"
+          ],
+          "description": "not_applicable: the gate does not exist for this target (for example tsc on a Python repo). It needs a reason, and does not make overall fail."
         },
         "tool": {
           "type": "string"
@@ -543,7 +643,8 @@
           "result": {
             "enum": [
               "fail",
-              "could_not_run"
+              "could_not_run",
+              "not_applicable"
             ]
           }
         }
