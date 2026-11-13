@@ -1,6 +1,7 @@
 # Review packet: bug-fix loop v0.8
 
-> **Design draft, not running.** Public copy of the 2026-11-10 packet; see the note at the
+> **Design draft, not running.** Public copy of the 2026-11-10 packet, with the owner's
+> role-seat change of 2026-11-13 (Grok Bot as Coordinator and Coach); see the note at the
 > top of `PROCESS-v0.8.md`.
 
 **For:** an outside reviewer. **From:** Austin Bell, who runs the loop.
@@ -37,6 +38,7 @@ Needless complexity counts as a defect, in the code and in this design.
 ```mermaid
 flowchart TD
     E["Events: commits, merged fixes, schedule ticks,<br/>new model or tool (Fresh eyes = trigger)<br/>events only queue work; the owner starts sessions"] --> P0
+    CO["Coordinator (Grok Bot)<br/>talks with the owner, starts stages, dispatches roles;<br/>no push access"] -. runs .-> P0
     P0["0 Preflight (script)<br/>probe: no credentials, egress allowlist, read-only mounts, no agent push<br/>harness self-test per copy, own port + build marker, pinned browsers, evidence root"] --> I
     I["1 Intake (script)<br/>event queue, reads Brad's refactor ledger"] --> S
     S["2 Scout<br/>risk score (script), reach and harm, coverage per area x oracle"] --> L
@@ -65,7 +67,7 @@ flowchart TD
     RV -- "anything else found" --> PR
     S4 --> LN
     PARK --> LN
-    LN["8 Learn (Coach)<br/>precision and recall (planted bugs) per oracle,<br/>time event to Published, classes Brad's agent repeats;<br/>only Learn proposes skill/kit/memory changes"]
+    LN["8 Learn (Coach: Grok Bot, a separate run from the Coordinator)<br/>precision and recall (planted bugs) per oracle,<br/>time event to Published, classes Brad's agent repeats;<br/>Coordinator choices graded by script where possible;<br/>only Learn proposes skill/kit/memory changes"]
     LN -. writes .-> M[("Loop memory, one owning stage per file:<br/>area map, twin map, rules, known bugs,<br/>known-fine (Decider accepts, expires on code change),<br/>threat model, bug classes, stamps, run manifest")]
     M -. feeds .-> S
     M -. feeds .-> L
@@ -98,6 +100,18 @@ pause request from the maintainer first.
 GitHub first, the agent chat channel when GitHub rate-limits. Private findings use the private form of each
 (a GitHub private vulnerability report, or a direct chat message).
 
+### Who runs each role (owner, 2026-11-13)
+
+Grok Bot runs the **Coordinator** and the **Coach**, as two separate runs with no shared
+context or memory. Grok is a model family the other roles do not use, which helps the
+Coach judge finders and fixers independently. The cost: the Coach grades a Coordinator on
+its own agent. So script measures stand in for the Coach's judgment wherever they exist,
+the Coach labels its Coordinator grades as same-agent, and the owner reads that part
+himself. Both Grok Bot roles may read private findings; those still leave only by the
+private route. Finders, Decider, Bug fixer and Reviewer are unchanged, and Publish stays a
+host script. **Open:** how a script starts Grok Bot, and whether it can run fresh and
+isolated (spec section 11).
+
 ## What changed in v0.8, and why
 
 | Outside review said | v0.8 does |
@@ -123,6 +137,9 @@ GitHub first, the agent chat channel when GitHub rate-limits. Private findings u
 not deleted. **Already covered:** agreeing a pause switch and private route with the
 maintainer (channels exist). **Not addressed:** checking past public loop PRs against the new Classify
 rule.
+
+**Owner change after the review (2026-11-13):** Grok Bot runs the Coordinator and the
+Coach (section above). The outside review did not see this change.
 
 **Limits of the evidence:** one small static site, one model family, one day, one owner
 who was also the maintainer. The v0.7 review was by a model from the same family as the

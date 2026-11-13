@@ -33,6 +33,9 @@ Everything else is in **Appendix A, not built**, and stays there until a phase e
 - Before phase 1, v0.3.1 and v0.8 are compared on an old snapshot. This waits for the
   refactor.
 - Five errors in v0.7 are corrected (section 12).
+- **Role seats (owner, 2026-11-13):** Grok Bot runs the Coordinator and the Coach, as two
+  separate runs. Both may read private findings. How a script starts Grok Bot is not yet
+  known (section 11). See section 7.
 
 ---
 
@@ -89,6 +92,8 @@ applies to this design too.
   Bot comments are not approval.
 - **Enforced, not only instructed:**
   - Every role runs in a fresh context, in a disposable VM with no credentials inside.
+    Two roles on the same agent are still two runs: the Coordinator and the Coach never
+    share a context, a session or the agent's own memory.
   - Every VM has a network egress allowlist: only the package mirrors and model API the
     role needs. Nothing else is reachable.
   - Each role's VM mounts only its own run folder as writable. Skills, kit files, loop
@@ -250,6 +255,11 @@ Before Route, a script marks a finding **private** if any of these hold:
 Private findings go only to the private route. A failing test for a private finding is
 never public, because it would disclose the problem. The default when unsure is private.
 
+Inside the loop, the Coordinator and the Coach (both Grok Bot, section 7) may read private
+findings, by the owner's decision of 2026-11-13. Reading is not sending: neither role puts
+a private finding in public text, a log outside the run folder, or any channel other than
+the private route.
+
 ### Step 5. Route
 
 | Route | When |
@@ -352,6 +362,11 @@ lock; a locked section waits.
   answer and a negative control, run before it is trusted. A tool that cannot fail is not
   checking anything.
 - Only Learn proposes changes to skills, the kit or memory; the owner approves.
+- **The Coach grades a Coordinator on the same agent** (section 7). So the Coach's
+  judgments of Coordinator choices (ranking, parking, budget, when to stop) are labelled
+  as same-agent in its report. Where a script can measure the same thing (throttle fired,
+  budget held, time to Published), the script's number is the record, not the Coach's
+  reading. The owner reads the Coordinator part of the report himself.
 
 **Rules for testing the loop itself.** Whenever the loop compares configurations (a new
 tool, an oracle on or off, a new model, v0.3.1 against v0.8), the test set obeys five rules:
@@ -425,6 +440,21 @@ when that code changes. One finder cannot hide a bug from later passes.
 |---|---|---|
 | When sessions run, which oracles are on, kit releases, private routing | Budget within the rules, ranking, parking | Merges, answers the question table, clinical calls, pausing the loop |
 
+**Who runs each role (owner, 2026-11-13).**
+
+| Role | Runs on | Notes |
+|---|---|---|
+| **Coordinator** | Grok Bot | Talks with the owner, starts stages, dispatches roles, keeps the run manifest. Holds no push access; Publish stays a host script (step 7) |
+| **Coach** (Learn) | Grok Bot, a separate run | Fresh context, no shared memory with the Coordinator run. Grades the Coordinator, so see the same-agent rule in step 8 |
+| Finders, Decider, Bug fixer, Reviewer | Unchanged | The reviewer stays on a different model family from the fixer |
+| Publisher | Host script | Runs no model |
+
+Grok Bot is a model family the loop's other roles do not use, which helps the Coach judge
+the finders and fixers independently. It does not help with grading the Coordinator: that
+is one agent grading its own work (section 9). Both Grok Bot roles may read private
+findings (step 4b). A session still starts only on the owner's own words to the
+Coordinator; Grok Bot cannot start one by itself.
+
 **Channels with the maintainer** already exist: GitHub first; the agent chat channel when GitHub rate
 limits. The question table, PRs and pause requests travel there. Private findings use the
 private form of the same channels (a GitHub private vulnerability report, or a direct
@@ -469,6 +499,11 @@ Later phases come from Appendix A, one at a time, each with its own pass criteri
 - **TruffleHog is not adopted.** The repo's CI already runs gitleaks; TruffleHog's extra is
   verifying found secrets, which means using a credential, which the loop must never do.
 - Third-party skills steer agents with repo access; each is pinned and vetted first.
+- **The Coach grades its own agent's Coordinator work.** Accepted by the owner
+  (2026-11-13). Reduced by separate runs, script measures where they exist, and the
+  owner reading that part of the report (step 8); not removed.
+- **More readers of private findings.** Grok Bot's two roles read them (step 4b). Each
+  extra reader is one more place a vulnerability could leak from.
 
 ## 10. Failure modes it guards against
 
@@ -496,6 +531,8 @@ Later phases come from Appendix A, one at a time, each with its own pass criteri
 | Evidence lost to scratch cleanup | Evidence root under the run folder |
 | Stale witnesses on a fast `main` | Rerun on new `main` before fix; time to Published tracked |
 | Owner and loop meaning different things by "merge" | Named publish states |
+| The Coach going easy on its own agent's Coordinator | Separate runs, no shared memory; script measures over Coach judgment; owner reads that part |
+| A private finding leaking through a Grok Bot role | Read-only access; private route only; publisher secret scan |
 
 ## 11. Open questions
 
@@ -508,6 +545,15 @@ Later phases come from Appendix A, one at a time, each with its own pass criteri
   (step 4b) and parked until after the refactor.
 - On the roadmap, the loop's host holds push access to a fork. Phase 0 must show that no VM
   can reach it.
+- **How does a script start Grok Bot?** The Coach needs a command line (`COACH_CMD`), and
+  scheduled Coordinator ticks need one too. Not yet known (owner, 2026-11-13). Until it is,
+  neither Grok Bot role can run in phase 0.
+- **Can Grok Bot run fresh and isolated?** Grok Bot is a standing assistant with its own
+  memory. Each run must start without that memory and pass the isolation probe (step 0):
+  no credentials, the egress allowlist, read-only mounts. If its runtime cannot do that,
+  the seats in section 7 come back to the owner.
+- **Does the maintainer's agent use Grok?** If it does, the Coach loses its independence
+  from the code it reviews (see the first question).
 
 ## 12. Evidence behind the design
 
